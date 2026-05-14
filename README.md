@@ -57,7 +57,9 @@ npm run server
 
 ### Client 端（每个工程师的机器）
 
-**最快**：在你想接入群聊的项目里打开 Claude Code，直接把 [`INSTALL.md`](./INSTALL.md) 全文复制粘贴发给 Claude，它会自动拉代码、装依赖、询问 server URL、写配置、起 subscriber、追加 CLAUDE.md，并提醒你重启 Claude Code 加载 MCP。
+**最快**：在你想接入群聊的项目里打开 Claude Code，直接把 [`INSTALL.md`](./INSTALL.md) 全文复制粘贴发给 Claude。它会自动检查是否已装（已装则跳过 clone/install）、按需询问 server URL、配置 `.mcp.json`、当前会话直接 Read `prompts/` 提示词（不污染 `CLAUDE.md`），最后起 subscriber + Monitor。
+
+部署一次后，每次需要接入群聊的新会话**重复发一次 INSTALL.md** 即可——是幂等的，会跳过已完成的步骤，只重新建立 subscriber + Monitor。项目 `CLAUDE.md` 末尾会被加一行指针提示 Claude "本项目支持联调，要接入就读 INSTALL.md"。
 
 手动部署同样支持：
 
