@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "groupchat": {
+      "command": "node",
+      "args": ["./mcp/index.js"],
+      "env": {
+        "CHAT_SERVER_WS": "ws://192.168.1.50:7600",
+        "CHAT_SERVER_HTTP": "http://192.168.1.50:7601",
+        "CHAT_PEER_LABEL": ""
+      }
+    }
+  }
+}
