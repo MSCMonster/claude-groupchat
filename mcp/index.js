@@ -15,6 +15,7 @@ const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio
 const { Inbox } = require('../shared/inbox');
 const { WSSenderClient } = require('./ws-client');
 const { uploadFile, downloadFile } = require('./http-client');
+const { getHttpUrl } = require('../shared/url');
 const { getLogger } = require('../logger');
 
 const log = getLogger('mcp');
@@ -174,12 +175,7 @@ function toolError(msg) {
   };
 }
 function buildDownloadUrl(fileId) {
-  if (process.env.CHAT_SERVER_HTTP) {
-    return `${process.env.CHAT_SERVER_HTTP.replace(/\/$/, '')}/download?fileId=${fileId}`;
-  }
-  const host = process.env.WS_HOST || '127.0.0.1';
-  const port = process.env.HTTP_PORT || 7601;
-  return `http://${host}:${port}/download?fileId=${fileId}`;
+  return `${getHttpUrl()}/download?fileId=${fileId}`;
 }
 
 // ===== 启动 =====

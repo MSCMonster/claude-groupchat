@@ -26,13 +26,15 @@
 │  Monitor 工具盯 stdout   │ │ │ │ │  Monitor 工具盯 stdout   │
 └──────────────────────────┘ │ │ │ └──────────────────────────┘
                              │ │ │
-                          WS │ │ │ WS
+                  WS + HTTP  │ │ │  WS + HTTP
+                  共用同一端口 │ │ │  共用同一端口
                              │ │ │
                        ┌─────▼─▼─▼─────┐         ┌─────────┐
                        │  chat server  │◀────────│  Redis  │
-                       │  (WS+HTTP)    │  消息历史 │  5.x+   │
-                       │               │  文件索引 │         │
-                       │  uploads/  ◀──┤───────  └─────────┘
+                       │  单端口路由：  │  消息历史 │  5.x+   │
+                       │  HTTP 默认 +   │  文件索引 │         │
+                       │  WS upgrade   │         └─────────┘
+                       │  uploads/     │
                        │  (24h 清理)   │
                        └───────────────┘
 ```
@@ -51,8 +53,7 @@ npm run server
 ```
 
 默认监听：
-- `0.0.0.0:7600` — WebSocket
-- `0.0.0.0:7601` — HTTP（上传/下载/health）
+- `0.0.0.0:7600` — WebSocket **和** HTTP 上传/下载/health **共用同一端口**（WS 走 HTTP upgrade）
 
 ### Client 端（每个工程师的机器）
 
@@ -61,7 +62,7 @@ git clone <this-repo> claude-groupchat
 cd claude-groupchat
 npm install
 cp .env.example .env
-# 编辑 .env：把 CHAT_SERVER_WS / CHAT_SERVER_HTTP 指向 server 的局域网 IP
+# 编辑 .env：把 CHAT_SERVER_URL 指向 server 的局域网 IP，例：http://192.168.1.50:7600
 # 可选：填 CHAT_PEER_LABEL 让其他人能用友好名字 @ 你
 ```
 
@@ -103,8 +104,8 @@ Claude 之后会在新消息到来时被自动打断，调用 `chat_pull` 拉取
 
 所有配置通过 `.env`。关键项见 `.env.example`，要点：
 
-- `WS_HOST` / `WS_PORT` / `HTTP_PORT`：server 监听 + client 推断连接地址
-- `CHAT_SERVER_WS` / `CHAT_SERVER_HTTP`：client 端跨机器时必填（写 server 的局域网 IP）
+- `PORT` / `BIND_HOST`：server 端监听端口与网卡（WS 与 HTTP 共用一个端口）
+- `CHAT_SERVER_URL`：client 端写 server 的完整 URL（如 `http://192.168.1.50:7600`），WS 自动推导成 `ws://...` 同端口
 - `REDIS_*`：仅 server 端需要
 - `FILE_TTL_HOURS` / `MAX_FILE_SIZE_MB` / `HISTORY_PUSH_COUNT`：可调
 - `CHAT_PEER_LABEL`：client 端显示名（不填则用 hostname:projectDir）

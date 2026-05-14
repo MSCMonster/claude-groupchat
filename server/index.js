@@ -16,8 +16,8 @@ const log = getLogger('server');
 
 // ===== 解析配置 =====
 const BIND_HOST = process.env.BIND_HOST || '0.0.0.0';
-const WS_PORT = Number(process.env.WS_PORT || 7600);
-const HTTP_PORT = Number(process.env.HTTP_PORT || 7601);
+// WS 与 HTTP 共用同一端口（HTTP server upgrade 事件转发给 ws）
+const PORT = Number(process.env.PORT || 7600);
 const CLEANUP_INTERVAL_MS =
   Number(process.env.CLEANUP_INTERVAL_MINUTES || 30) * 60 * 1000;
 
@@ -44,14 +44,24 @@ async function main() {
   }));
 
   const httpServer = http.createServer(app);
-  httpServer.listen(HTTP_PORT, BIND_HOST, () => {
-    log.info(`HTTP 监听 http://${BIND_HOST}:${HTTP_PORT}`);
+
+  // ===== WS 服务（共用同一端口，挂在 HTTP server 的 upgrade 事件上）=====
+  const wss = new WebSocketServer({ noServer: true });
+  wss.on('connection', (ws, req) => handleConnection(ws, req, room, storage));
+  httpServer.on('upgrade', (req, socket, head) => {
+    // 只接受根路径或 /ws 的升级请求；其它路径直接拒绝
+    const url = req.url || '/';
+    if (url !== '/' && url !== '/ws') {
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });
 
-  // ===== WS 服务 =====
-  const wss = new WebSocketServer({ host: BIND_HOST, port: WS_PORT });
-  wss.on('listening', () => log.info(`WS 监听 ws://${BIND_HOST}:${WS_PORT}`));
-  wss.on('connection', (ws, req) => handleConnection(ws, req, room, storage));
+  httpServer.listen(PORT, BIND_HOST, () => {
+    log.info(`HTTP + WS 监听 :${PORT}（bind=${BIND_HOST}，http://${BIND_HOST}:${PORT} 同址 ws://${BIND_HOST}:${PORT}）`);
+  });
 
   // 心跳：每 30s 给所有连接发 ping，未在 60s 内回应则断开
   const pingInterval = setInterval(() => {

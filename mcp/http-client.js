@@ -3,15 +3,13 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const { getHttpUrl } = require('../shared/url');
 const { getLogger } = require('../logger');
 
 const log = getLogger('http-client');
 
 function baseUrl() {
-  if (process.env.CHAT_SERVER_HTTP) return process.env.CHAT_SERVER_HTTP.replace(/\/$/, '');
-  const host = process.env.WS_HOST || '127.0.0.1';
-  const port = process.env.HTTP_PORT || 7601;
-  return `http://${host}:${port}`;
+  return getHttpUrl();
 }
 
 // 上传单个文件，返回 server 端的 { fileId, filename, size, mimeType }

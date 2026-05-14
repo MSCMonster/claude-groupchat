@@ -4,15 +4,14 @@
 const { randomUUID } = require('crypto');
 const WebSocket = require('ws');
 const { MSG, ROLE, buildPeer } = require('../shared/protocol');
+const { getWsUrl } = require('../shared/url');
 const { getLogger } = require('../logger');
 
 const log = getLogger('ws-client');
 
 class WSSenderClient {
   constructor(opts = {}) {
-    this.url = opts.url
-      || process.env.CHAT_SERVER_WS
-      || `ws://${process.env.WS_HOST || '127.0.0.1'}:${process.env.WS_PORT || 7600}`;
+    this.url = opts.url || getWsUrl();
     this.peer = buildPeer({ projectDir: process.cwd() });
     this.ws = null;
     this.connected = false;

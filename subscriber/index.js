@@ -20,12 +20,12 @@ process.env.LOG_TO_STDERR = 'true';
 const WebSocket = require('ws');
 const { MSG, ROLE, buildPeer } = require('../shared/protocol');
 const { Inbox } = require('../shared/inbox');
+const { getWsUrl } = require('../shared/url');
 const { getLogger } = require('../logger');
 
 const log = getLogger('subscriber');
 
-const WS_URL = process.env.CHAT_SERVER_WS
-  || `ws://${process.env.WS_HOST || '127.0.0.1'}:${process.env.WS_PORT || 7600}`;
+const WS_URL = getWsUrl();
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 
