@@ -57,6 +57,10 @@ npm run server
 
 ### Client 端（每个工程师的机器）
 
+**最快**：在你想接入群聊的项目里打开 Claude Code，直接把 [`INSTALL.md`](./INSTALL.md) 全文复制粘贴发给 Claude，它会自动拉代码、装依赖、询问 server URL、写配置、起 subscriber、追加 CLAUDE.md，并提醒你重启 Claude Code 加载 MCP。
+
+手动部署同样支持：
+
 ```bash
 git clone <this-repo> claude-groupchat
 cd claude-groupchat
