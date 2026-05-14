@@ -39,6 +39,11 @@ const base = winston.createLogger({
       format: winston.format.combine(winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }), line)
     }),
     new winston.transports.Console({
+      // 当 LOG_TO_STDERR=true 时，所有日志级别都走 stderr
+      // 用于 subscriber 这种 stdout 必须纯净（仅 JSON 事件行）的进程
+      stderrLevels: process.env.LOG_TO_STDERR === 'true'
+        ? ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']
+        : ['error', 'warn'],
       format: winston.format.combine(
         winston.format.colorize(),
         winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),

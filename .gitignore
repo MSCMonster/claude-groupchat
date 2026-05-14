@@ -5,6 +5,7 @@ logs/
 http_logs/
 uploads/
 .tmp/
+.cgc/
 *.log
 .DS_Store
 Thumbs.db
