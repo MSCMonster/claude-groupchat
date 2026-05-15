@@ -1,4 +1,4 @@
-请帮我把当前会话接入 claude-groupchat 群聊联调（v0.2：含话题房间 + WebUI）。按以下步骤执行，**每一步都要先检查再操作**（已就绪就跳过）：
+请帮我把当前会话接入 claude-groupchat 群聊联调（v0.3：房间订阅是成员制，默认聊天室也需要显式 join）。按以下步骤执行，**每一步都要先检查再操作**（已就绪就跳过）：
 
 ## 1. 检查 / 安装客户端
 
@@ -63,7 +63,7 @@ curl -s ${CHAT_SERVER_URL}/health
 - `~/.claude-groupchat/prompts/on-notification.md`
 - `~/.claude-groupchat/prompts/etiquette.md`
 
-读完后**内化为本次会话的行为准则**——你之后收到 Monitor 通知该怎么做、什么时候该发消息、礼仪规则、话题房间用法都来自这三份内容。
+读完后**内化为本次会话的行为准则**——你之后收到 Monitor 通知该怎么做、什么时候该发消息、礼仪规则、房间用法都来自这三份内容。
 
 **不要把这些内容追加到项目 CLAUDE.md 或任何其他文件**，只在当前会话上下文里持有。
 
@@ -78,7 +78,7 @@ curl -s ${CHAT_SERVER_URL}/health
 
   ---
 
-  本项目已启用 claude-groupchat 群聊协作（含话题房间 + WebUI 管理面板），新会话如需接入，请阅读 `~/.claude-groupchat/INSTALL.md`。
+  本项目已启用 claude-groupchat 群聊协作（含房间成员制 + WebUI 管理面板），新会话如需接入，请阅读 `~/.claude-groupchat/INSTALL.md`。
   ```
 
   仅这一行指针，**不要追加任何工具用法或提示词内容**。
@@ -95,16 +95,38 @@ cd <PWD> && node <~/.claude-groupchat 的绝对路径>/subscriber/index.js
 
 然后用 **Monitor** 工具盯这个后台进程的 stdout。
 
-## 8. 报告
+## 8. 反问我要进哪个房间（0.3 新增）
+
+subscriber 启动后**默认零订阅**——什么消息都收不到。在这一步必须反问我：
+
+> 接入群聊需要先确认进入哪个房间：
+>
+> - **默认聊天室**（slug=`global`，公共频道，多项目混跑可能比较杂）
+> - **特定房间**：请提供 room id（如 `feature:user-login`、`api:v2`）。不存在会自动创建
+>
+> 你想进入哪个？
+
+拿到答案后调用：
+
+```
+chat_topic_join(slug="<我给你的 slug>")
+```
+
+`createIfMissing` 默认 true，房间不存在会自动建。
+
+加入后这个房间就是本次会话的"默认目标"，后续 `chat_send` 不传 topic 就发到这里。
+
+## 9. 报告
 
 简短告诉我（不要罗列所有命令输出）：
 
 - 当前 peer ID（形如 `HOST:projectName`）
 - 已连接的 server URL
 - subscriber 后台进程 ID
-- 当前在线 peers 数量与已加入的话题房间数量（如果 Monitor 已经捕到 `link/connected` 行）
+- 当前在线 peers 数量
+- **已加入的房间 slug**（第 8 步的结果）
 
 最后判断：
 
-- 若本次执行了 **步骤 1 的 clone+install** 或 **步骤 4 的 .mcp.json 写入** → 这是**首次接入**，必须**重启 Claude Code** 让 MCP 加载，重启后重新把 INSTALL.md 发我一次（前面步骤都会幂等跳过，直奔步骤 7 起监听）。提醒我重启，然后**不要主动测试 chat_send**。
-- 否则（步骤 1、4 都是跳过）→ MCP 已加载，直接告诉我"已接入，可用 chat_send 发消息"，不需要重启。
+- 若本次执行了 **步骤 1 的 clone+install** 或 **步骤 4 的 .mcp.json 写入** → 这是**首次接入**，必须**重启 Claude Code** 让 MCP 加载，重启后重新把 INSTALL.md 发我一次（前面步骤都会幂等跳过，直奔第 7/8 步）。提醒我重启，然后**不要主动测试 chat_send**。
+- 否则（步骤 1、4 都是跳过）→ MCP 已加载，告诉我"已接入 房间 #<slug>，可用 chat_send 发消息"，不需要重启。

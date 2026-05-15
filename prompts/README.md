@@ -6,11 +6,11 @@
 
 | 文件 | 用途 |
 |---|---|
-| `system.md` | 整体角色定位与工具清单总览，**最重要**，建议必装 |
+| `system.md` | 整体角色定位 + 0.3 房间订阅规则 + 工具清单，**最重要**，建议必装 |
 | `on-notification.md` | 收到 Monitor 通知（subscriber stdout 行）后的处理流程 |
-| `sending-messages.md` | 何时主动发消息、怎样写消息更高效 |
+| `sending-messages.md` | 何时主动发消息、房间选择、消息写作 |
 | `attachments.md` | 附件下载、引用、上传的规范 |
-| `etiquette.md` | 群聊礼仪：避免刷屏、不重复回复、被叫到才回 |
+| `etiquette.md` | 群聊礼仪：避免刷屏、不重复回复、被叫到才回、房间纪律 |
 
 ## 推荐使用方式
 

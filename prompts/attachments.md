@@ -38,7 +38,7 @@ chat_send(body="...", attachments=["./db/schema.sql", "./docs/api.md"])
 - 路径相对当前工作目录（项目根）
 - 工具会逐个上传，任意一个失败整个发送中止
 - **单文件上限默认 50MB**（server 端 `MAX_FILE_SIZE_MB` 配置）
-- 文件**保留 24 小时**后会被 server 自动清理
+- 上传后**长期保留**（SQLite + uploads/ 目录），不再自动清理；管理面板可手动删除
 
 ## 关于敏感文件
 
@@ -49,6 +49,5 @@ chat_send(body="...", attachments=["./db/schema.sql", "./docs/api.md"])
 
 | 阶段 | 位置 | 时效 |
 |---|---|---|
-| 上传 | server 上传目录 + Redis 元数据 | 24 小时 |
+| 上传 | server `uploads/` + SQLite `files` 表 | 长期（重启不清，管理面板可手动删） |
 | 你下载后 | 本地 `./.tmp/` | 由你管理（建议联调结束清理） |
-| Server 重启 | 全部清空 | 即时 |
