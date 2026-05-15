@@ -14,7 +14,9 @@
 
 ## 推荐使用方式
 
-把 `system.md` + `on-notification.md` + `etiquette.md` 三个文件拼接进项目根目录的 `CLAUDE.md`：
+按 `INSTALL.md` 的流程接入时，Claude 会用 Read 工具把这三个文件读入**当前会话上下文**作为本次的行为准则；项目 `CLAUDE.md` 末尾只追加一行指针，不复制完整提示词内容（避免污染常驻上下文）。
+
+如果你想自己 append 到 `CLAUDE.md`：
 
 ```bash
 # Windows PowerShell
@@ -23,5 +25,3 @@ Get-Content prompts/system.md, prompts/on-notification.md, prompts/etiquette.md 
 # bash
 cat prompts/system.md prompts/on-notification.md prompts/etiquette.md > CLAUDE.md
 ```
-
-或者你可以保留各项目原本的 `CLAUDE.md`，把这些片段 append 到末尾。

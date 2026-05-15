@@ -1,4 +1,4 @@
-请帮我把当前会话接入 claude-groupchat 群聊联调。按以下步骤执行，**每一步都要先检查再操作**（已就绪就跳过）：
+请帮我把当前会话接入 claude-groupchat 群聊联调（v0.2：含话题房间 + WebUI）。按以下步骤执行，**每一步都要先检查再操作**（已就绪就跳过）：
 
 ## 1. 检查 / 安装客户端
 
@@ -9,7 +9,7 @@
   - `git clone https://nekoneko.site:10443/MSCMonster/claude-groupchat.git ~/.claude-groupchat`
   - 主源 SSL 自签：本次命令临时加 `-c http.sslVerify=false`，**不要全局禁用 SSL**
   - 主源不通时备用：`http://git.zalldigital.cn/aiji/claude-groupchat.git`
-- 若刚执行了 clone，进入目录跑 `npm install`。国内网络慢可临时 `--registry=https://registry.npmmirror.com`，**不要改全局 registry**
+- 若刚执行了 clone 或 pull 后发现依赖有更新，进入目录跑 `npm install`。国内网络慢可临时 `--registry=https://registry.npmmirror.com`，**不要改全局 registry**
 
 ## 2. 检查 / 配置 .env
 
@@ -63,7 +63,7 @@ curl -s ${CHAT_SERVER_URL}/health
 - `~/.claude-groupchat/prompts/on-notification.md`
 - `~/.claude-groupchat/prompts/etiquette.md`
 
-读完后**内化为本次会话的行为准则**——你之后收到 Monitor 通知该怎么做、什么时候该发消息、礼仪规则，都来自这三份内容。
+读完后**内化为本次会话的行为准则**——你之后收到 Monitor 通知该怎么做、什么时候该发消息、礼仪规则、话题房间用法都来自这三份内容。
 
 **不要把这些内容追加到项目 CLAUDE.md 或任何其他文件**，只在当前会话上下文里持有。
 
@@ -78,7 +78,7 @@ curl -s ${CHAT_SERVER_URL}/health
 
   ---
 
-  本项目已启用 claude-groupchat 群聊联调。新会话需要接入时，把 `~/.claude-groupchat/INSTALL.md` 完整发给 Claude Code（仓库源：https://nekoneko.site:10443/MSCMonster/claude-groupchat）。
+  本项目已启用 claude-groupchat 群聊协作（含话题房间 + WebUI 管理面板），新会话如需接入，请阅读 `~/.claude-groupchat/INSTALL.md`。
   ```
 
   仅这一行指针，**不要追加任何工具用法或提示词内容**。
@@ -102,7 +102,7 @@ cd <PWD> && node <~/.claude-groupchat 的绝对路径>/subscriber/index.js
 - 当前 peer ID（形如 `HOST:projectName`）
 - 已连接的 server URL
 - subscriber 后台进程 ID
-- 当前在线 peers 数量（如果 Monitor 已经捕到 `link/connected` 行）
+- 当前在线 peers 数量与已加入的话题房间数量（如果 Monitor 已经捕到 `link/connected` 行）
 
 最后判断：
 
