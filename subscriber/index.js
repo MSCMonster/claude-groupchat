@@ -1,24 +1,21 @@
 // Subscriber 后台进程：连 WS server 作为 receiver
-// 设计：通知 / 队列 分离
-//   - 所有收到的事件 → 追加到本地 inbox 队列文件（.cgc/inbox.jsonl）
-//   - stdout 仅打印极简通知行（"有 N 条未读，最新来自 X"），用于 Monitor 触发 Claude
-//   - Claude 收到通知后调用 MCP 工具 pull_messages 拉取实际内容
+// 通知 / 队列 分离：
+//   - 收到的事件 → 追加到 .cgc/inbox.jsonl
+//   - stdout 仅打印极简通知行（一行 JSON），由 Monitor 触发 Claude
+//   - Claude 收到通知后调用 MCP 工具 chat_pull 拉取实际内容
 //
-// stdout 通知行格式（每行一个 JSON 对象）:
-//   {"event":"new","unread":N,"latest":{"kind":"message|peer_join|peer_leave","from":"..."},"preview":"..."}
-//   {"event":"link","state":"connected","peers":N}
+// stdout 通知行：
+//   {"event":"new","unread":N,"latest":{"kind":"message|topic_*|peer_*","topic":"global","from":"..."},"preview":"..."}
+//   {"event":"link","state":"connected","peers":N,"topics":N}
 //   {"event":"link","state":"disconnected","reason":"..."}
-//
-// 通知极简化原因：让 Monitor 一次推送的 token 量最小、避免污染 Claude 上下文；
-// 详情由 Claude 主动 pull。
 'use strict';
 require('dotenv').config();
 
-// 强制 logger 控制台输出走 stderr，保证 stdout 纯净
+// stdout 必须纯净（仅 JSON 通知）；logger 控制台输出走 stderr
 process.env.LOG_TO_STDERR = 'true';
 
 const WebSocket = require('ws');
-const { MSG, ROLE, buildPeer } = require('../shared/protocol');
+const { MSG, ROLE, GLOBAL_TOPIC, buildPeer } = require('../shared/protocol');
 const { Inbox } = require('../shared/inbox');
 const { getWsUrl } = require('../shared/url');
 const { getLogger } = require('../logger');
@@ -46,6 +43,7 @@ async function notifyNew(latestEntry) {
     unread: stats.unread,
     latest: {
       kind: latestEntry.kind,
+      topic: latestEntry.topic || null,
       from: latestEntry.from ? latestEntry.from.id : null,
       label: latestEntry.from ? latestEntry.from.label : null
     },
@@ -59,6 +57,10 @@ function notifyLink(state, extra = {}) {
   process.stdout.write(line + '\n');
 }
 
+function topicTag(topic) {
+  return topic && topic !== GLOBAL_TOPIC ? `[#${topic}] ` : '';
+}
+
 function buildPreview(entry) {
   switch (entry.kind) {
     case 'message': {
@@ -66,17 +68,39 @@ function buildPreview(entry) {
       const tail = (entry.body || '').length > 60 ? '…' : '';
       const att = entry.attachments && entry.attachments.length
         ? ` (附件 ${entry.attachments.length})` : '';
-      return text + tail + att;
+      const sys = entry.isSystem ? '[系统] ' : '';
+      return `${sys}${topicTag(entry.topic)}${text}${tail}${att}`;
     }
     case 'peer_join':
-      return `${entry.peer.id} 加入聊天室`;
+      return `${entry.peer && entry.peer.id} 加入聊天室`;
     case 'peer_leave':
-      return `${entry.peer.id} 离开聊天室`;
+      return `${entry.peer && entry.peer.id} 离开聊天室`;
+    case 'topic_created':
+      return `话题创建：#${entry.topic && entry.topic.slug}`;
+    case 'topic_deleted':
+      return `话题删除：#${entry.topic && entry.topic.slug}`;
+    case 'topic_member_joined':
+      return `${entry.peerId} 加入 #${entry.topic && entry.topic.slug}`;
+    case 'topic_member_left':
+      return `${entry.peerId} 退出 #${entry.topic && entry.topic.slug}`;
+    case 'topic_meta_updated':
+      return `话题元数据更新：#${entry.topic && entry.topic.slug}`;
+    case 'topic_todo_added':
+      return `[#${entry.topic && entry.topic.slug}] 新 TODO：${truncate(entry.todo && entry.todo.content, 40)}`;
+    case 'topic_todo_updated':
+      return `[#${entry.topic && entry.topic.slug}] TODO 更新：${truncate(entry.todo && entry.todo.content, 40)}${entry.todo && entry.todo.done ? ' ✓' : ''}`;
+    case 'topic_todo_deleted':
+      return `[#${entry.topic && entry.topic.slug}] TODO 删除 id=${entry.todoId}`;
     case 'history':
-      return `服务器历史 ${entry.messages.length} 条`;
+      return `服务器历史 ${entry.messages ? entry.messages.length : 0} 条`;
     default:
       return entry.kind;
   }
+}
+
+function truncate(s, n) {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n) + '…' : s;
 }
 
 // ===== inbox 写入 =====
@@ -106,18 +130,23 @@ function connect() {
       switch (msg.type) {
         case MSG.HELLO_ACK:
           connected = true;
-          notifyLink('connected', { peers: (msg.peers || []).length });
+          notifyLink('connected', {
+            peers: (msg.peers || []).length,
+            topics: (msg.topics || []).length,
+            joinedTopics: msg.joinedTopics || []
+          });
           break;
         case MSG.HISTORY:
           if (Array.isArray(msg.messages) && msg.messages.length) {
-            // 历史消息逐条写入 inbox（kind=message），但通知合并成一条
             for (const m of msg.messages) {
               await inbox.append({
                 kind: 'message',
                 id: m.id,
+                topic: m.topic || GLOBAL_TOPIC,
                 from: m.from,
                 body: m.body,
                 attachments: m.attachments || [],
+                isSystem: !!m.isSystem,
                 ts: m.ts,
                 isHistory: true
               });
@@ -126,8 +155,8 @@ function connect() {
             process.stdout.write(JSON.stringify({
               event: 'new',
               unread: stats.unread,
-              latest: { kind: 'history', from: null, label: null },
-              preview: `服务器历史回放 ${msg.messages.length} 条`
+              latest: { kind: 'history', topic: msg.topic || GLOBAL_TOPIC, from: null, label: null },
+              preview: `服务器历史回放 ${msg.messages.length} 条 (topic=${msg.topic || GLOBAL_TOPIC})`
             }) + '\n');
           }
           break;
@@ -135,9 +164,12 @@ function connect() {
           await recordEvent({
             kind: 'message',
             id: msg.id,
+            topic: msg.topic || GLOBAL_TOPIC,
             from: msg.from,
             body: msg.body,
             attachments: msg.attachments || [],
+            mentions: msg.mentions || [],
+            isSystem: !!msg.isSystem,
             ts: msg.ts
           });
           break;
@@ -153,6 +185,17 @@ function connect() {
             kind: 'peer_leave',
             peer: msg.peer,
             peers: msg.peers || []
+          });
+          break;
+        case MSG.TOPIC_EVENT:
+          // 子类型直接用作 entry.kind
+          await recordEvent({
+            kind: msg.kind || 'topic_event',
+            topic: msg.topic || null,
+            peerId: msg.peerId || null,
+            todo: msg.todo || null,
+            todoId: msg.todoId || null,
+            by: msg.by || null
           });
           break;
         case MSG.ERROR:
