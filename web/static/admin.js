@@ -116,13 +116,12 @@
       </div>
 
       <div class="admin-section">
-        <h3>成员</h3>
-        ${isGlobal ? '<div class="empty">全局房间所有 peer 默认在线，无需显式管理</div>' :
-          `<div class="row">
-            <select id="add-member-select" style="flex:1"></select>
-            <button class="primary" id="add-member">加入</button>
-          </div>
-          <div id="member-list"></div>`}
+        <h3>成员${isGlobal ? '（默认聊天室）' : ''}</h3>
+        <div class="row">
+          <select id="add-member-select" style="flex:1"></select>
+          <button class="primary" id="add-member">加入</button>
+        </div>
+        <div id="member-list"></div>
       </div>
     `;
 
@@ -157,7 +156,7 @@
     newTodo.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTodo(); });
 
     renderTodos();
-    if (!isGlobal) renderMembers();
+    renderMembers();
   }
 
   async function addTodo() {

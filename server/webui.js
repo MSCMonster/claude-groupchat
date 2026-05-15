@@ -102,14 +102,8 @@ function buildWebUIRouter({ storage, room, getHttpBase }) {
 
   router.get('/api/topics/:slug/members', (req, res) => {
     const slug = req.params.slug;
-    if (slug === GLOBAL_TOPIC) {
-      // global 视为所有 peer
-      return res.json({ members: storage.listAllPeers().map(p => ({
-        peerId: p.id, joinedAt: p.firstSeenAt, hostname: p.hostname,
-        projectDir: p.projectDir, label: p.label, isOnline: p.isOnline
-      })) });
-    }
     if (!storage.getTopic(slug)) return res.status(404).json({ error: '话题不存在' });
+    // 0.3.0 起默认聊天室 global 也是成员制，统一走 listMembers
     res.json({ members: storage.listMembers(slug) });
   });
 

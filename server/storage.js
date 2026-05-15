@@ -120,15 +120,32 @@ class Storage {
   }
 
   _ensureGlobalTopic() {
-    const exists = this.db.prepare('SELECT 1 FROM topics WHERE slug = ?').get(GLOBAL_TOPIC);
+    const exists = this.db.prepare('SELECT slug, title, description FROM topics WHERE slug = ?').get(GLOBAL_TOPIC);
+    const now = Date.now();
     if (!exists) {
-      const now = Date.now();
       this.db.prepare(`
         INSERT INTO topics (slug, title, description, announcement, created_by, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(GLOBAL_TOPIC, '全局聊天室', '所有 peer 默认在此频道收发消息', '', 'system', now, now);
-      log.info('创建内置全局房间 global');
+      `).run(GLOBAL_TOPIC, '默认聊天室', '所有人公共的默认频道；加入后才会收到广播', '', 'system', now, now);
+      log.info('创建内置默认聊天室 global');
+      return;
     }
+    // 0.3.0 起将原"全局聊天室"重命名为"默认聊天室"。仅在老数据未被人手改过时升级文案，
+    // 避免覆盖运维侧的自定义标题/简介。
+    const oldTitle = '全局聊天室';
+    const oldDesc = '所有 peer 默认在此频道收发消息';
+    const patch = {};
+    if (exists.title === oldTitle) patch.title = '默认聊天室';
+    if (exists.description === oldDesc) patch.description = '所有人公共的默认频道；加入后才会收到广播';
+    if (Object.keys(patch).length === 0) return;
+    this.db.prepare(`
+      UPDATE topics SET title = ?, description = ?, updated_at = ? WHERE slug = ?
+    `).run(
+      patch.title !== undefined ? patch.title : exists.title,
+      patch.description !== undefined ? patch.description : exists.description,
+      now, GLOBAL_TOPIC
+    );
+    log.info('迁移默认聊天室文案：全局聊天室 → 默认聊天室');
   }
 
   // ===== peer =====

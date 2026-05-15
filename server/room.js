@@ -112,8 +112,9 @@ class Room {
   }
 
   // ===== 广播 =====
-  // 全局广播（含发送者本身可排除）
-  broadcastGlobal(message, { excludePeerId } = {}) {
+  // 所有在线广播（不看订阅状态）。仅用于元事件，如 topic_created/deleted/meta_updated。
+  // 普通聊天消息（包括默认聊天室 global）不再走这里 —— 0.3.0 起 global 也是成员制。
+  broadcastAllOnline(message, { excludePeerId } = {}) {
     const payload = JSON.stringify(message);
     let count = 0;
     for (const [peerId, entry] of this.peers) {
@@ -126,9 +127,11 @@ class Room {
     return count;
   }
 
-  // 话题房间广播：仅成员
+  // 兼容别名：保留旧调用点，但语义已经是"所有在线广播"
+  broadcastGlobal(message, opts) { return this.broadcastAllOnline(message, opts); }
+
+  // 话题房间广播：仅成员（0.3.0 起 global 也走这里）
   broadcastTopic(topic, message, { excludePeerId } = {}) {
-    if (topic === GLOBAL_TOPIC) return this.broadcastGlobal(message, { excludePeerId });
     const payload = JSON.stringify(message);
     let count = 0;
     const members = this.storage.listMembers(topic);
@@ -161,14 +164,11 @@ class Room {
     const fromPeer = entry ? entry.peer : (fromPeerId === SYSTEM_PEER_ID ? systemPeer() : null);
     if (!fromPeer) throw new Error(`未知 peerId=${fromPeerId}`);
 
-    // 权限：非 global 必须是成员（system 例外，可向任意话题注入）
-    if (t !== GLOBAL_TOPIC && fromPeerId !== SYSTEM_PEER_ID) {
-      if (!this.storage.getTopic(t)) throw new Error(`话题不存在: ${t}`);
-      if (!this.storage.isMember(t, fromPeerId)) {
-        throw new Error(`未加入话题房间: ${t}`);
-      }
-    } else if (t !== GLOBAL_TOPIC && !this.storage.getTopic(t)) {
-      throw new Error(`话题不存在: ${t}`);
+    // 权限：任何房间（包括默认聊天室 global）必须先加入才能发送。
+    // system 例外：WebUI 可向任意房间注入系统消息。
+    if (!this.storage.getTopic(t)) throw new Error(`话题不存在: ${t}`);
+    if (fromPeerId !== SYSTEM_PEER_ID && !this.storage.isMember(t, fromPeerId)) {
+      throw new Error(`未加入房间: ${t}`);
     }
 
     const mentions = extractTopicMentions(body);
@@ -225,7 +225,6 @@ class Room {
   }
 
   joinTopic(slug, peerId) {
-    if (slug === GLOBAL_TOPIC) return; // global 默认在，无需加入
     this.storage.addMember(slug, peerId);
     const topic = this.storage.getTopic(slug);
     this.broadcastTopic(slug, {
@@ -236,9 +235,8 @@ class Room {
   }
 
   leaveTopic(slug, peerId) {
-    if (slug === GLOBAL_TOPIC) return;
     const topic = this.storage.getTopic(slug);
-    // 通知现有成员（包含正离开者）
+    // 先在仍是成员时通知，再 removeMember
     this.broadcastTopic(slug, {
       type: MSG.TOPIC_EVENT,
       kind: 'topic_member_left',
@@ -249,9 +247,9 @@ class Room {
 
   updateTopicMeta(slug, patch, by) {
     const topic = this.storage.updateTopicMeta(slug, patch);
-    // global 的 meta 全局广播；topic 仅成员
+    // 默认聊天室元数据全员可见（所有在线 peer 在房间列表里都能看到它）；其它 topic 仅成员
     if (slug === GLOBAL_TOPIC) {
-      this.broadcastGlobal({
+      this.broadcastAllOnline({
         type: MSG.TOPIC_EVENT, kind: 'topic_meta_updated', topic, by: by || null
       });
     } else {
@@ -370,9 +368,8 @@ class Room {
       by: by || null,
       ts: Date.now()
     };
-    // global 全员可见；其它 topic 仅成员
-    if (slug === GLOBAL_TOPIC) this.broadcastGlobal(event);
-    else this.broadcastTopic(slug, event);
+    // 0.3.0 起所有房间一致：批量事件作为"房间内事项更新"，只推送给成员
+    this.broadcastTopic(slug, event);
     log.info(`批量话题操作 slug=${slug} ops=${ops.length} by=${by || '-'}`);
     return { topic, changes };
   }

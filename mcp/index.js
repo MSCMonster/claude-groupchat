@@ -21,23 +21,27 @@ const log = getLogger('mcp');
 const inbox = new Inbox(process.cwd());
 const ws = new WSSenderClient();
 
+// 会话内"当前默认房间"：chat_topic_join 成功后会更新，chat_send 不传 topic 时使用
+let currentTopic = null;
+
 const server = new McpServer(
-  { name: 'claude-groupchat', version: '0.2.2' },
+  { name: 'claude-groupchat', version: '0.3.0' },
   { capabilities: { tools: {} } }
 );
 
 // ===== 工具：发送消息 =====
 server.registerTool('chat_send', {
-  description: '向群聊广播一条消息。' +
-    '默认发到全局聊天室；指定 topic 则只在该话题房间内可见。' +
-    '可在正文里用 @topic:<slug> 提及话题房间（例：邀请其他人加入）。' +
+  description: '向所在房间广播一条消息。' +
+    '0.3.0 起所有房间（包括默认聊天室 global）均为成员制：发送前必须先 chat_topic_join。' +
+    '不传 topic 时用本会话最近一次 join 的房间；首次发消息前请先 join 目标房间。' +
+    '可在正文里用 @topic:<slug> 提及其它房间。' +
     'attachments 是本地文件路径数组，工具会上传后把 fileId/url 附加到消息里。',
   inputSchema: {
     body: z.string().describe('消息正文'),
     attachments: z.array(z.string()).optional()
       .describe('可选：本地文件路径数组，会上传并附在消息里发出'),
     topic: z.string().optional()
-      .describe('可选：话题房间 slug。不传 = global 全局聊天室；非 global 时发送者必须是该房间成员')
+      .describe('可选：目标房间 slug。不传则用本会话最近 join 的房间；如未 join 过任何房间会报错')
   }
 }, async ({ body, attachments, topic }) => {
   const uploaded = [];
@@ -58,15 +62,23 @@ server.registerTool('chat_send', {
     }
   }
 
+  const target = topic || currentTopic;
+  if (!target) {
+    return toolError(
+      '未指定 topic 且当前会话未 join 任何房间。请先 chat_topic_join <slug>，' +
+      '或在 chat_send 里显式传 topic。默认聊天室的 slug 为 "global"。'
+    );
+  }
+
   try {
-    await ws.send(body, uploaded, topic);
+    await ws.send(body, uploaded, target);
   } catch (e) {
     return toolError(`发送失败: ${e.message}`);
   }
 
   return toolText({
     status: 'sent',
-    topic: topic || 'global',
+    topic: target,
     body,
     attachments: uploaded
   });
@@ -192,23 +204,49 @@ server.registerTool('chat_topic_create', {
 });
 
 server.registerTool('chat_topic_join', {
-  description: '加入一个已存在的话题房间，之后才能在该话题内收发消息',
-  inputSchema: { slug: z.string().describe('话题 slug') }
-}, async ({ slug }) => {
+  description: '加入一个房间，之后才能在房间内收发消息。' +
+    '0.3.0 起默认聊天室也是成员制：要进入"默认聊天室"用 slug="global"。' +
+    'createIfMissing 默认 true：房间不存在则自动创建（约定 slug 直接进的典型用法）。' +
+    '调用成功后该房间成为本会话的默认目标，后续 chat_send 不传 topic 时用它。',
+  inputSchema: {
+    slug: z.string().describe('房间 slug。默认聊天室是 "global"；其它如 "feature:user-login"'),
+    createIfMissing: z.boolean().optional()
+      .describe('不存在则创建，默认 true'),
+    title: z.string().optional().describe('创建时使用的展示标题，默认与 slug 相同'),
+    description: z.string().optional().describe('创建时使用的简介')
+  }
+}, async ({ slug, createIfMissing, title, description }) => {
   try {
-    const topic = await ws.topicJoin(slug);
-    return toolText({ status: 'joined', topic });
+    const topic = await ws.topicJoin(slug, { createIfMissing, title, description });
+    currentTopic = slug;
+    return toolText({ status: 'joined', topic, currentTopic });
   } catch (e) { return toolError(`加入失败: ${e.message}`); }
 });
 
 server.registerTool('chat_topic_leave', {
-  description: '退出一个话题房间。退出后该房间的消息不再推送给你',
-  inputSchema: { slug: z.string().describe('话题 slug') }
+  description: '退出一个房间。退出后该房间的消息不再推送给你。' +
+    '0.3.0 起默认聊天室也可以退出（slug="global"），用于完全屏蔽公共频道噪音。' +
+    '若退出的是当前默认目标，本会话的默认目标会被清空，下次发送需重新指定。',
+  inputSchema: { slug: z.string().describe('房间 slug，例 global / feature:user-login') }
 }, async ({ slug }) => {
   try {
     const topic = await ws.topicLeave(slug);
-    return toolText({ status: 'left', topic });
+    if (currentTopic === slug) currentTopic = null;
+    return toolText({ status: 'left', topic, currentTopic });
   } catch (e) { return toolError(`退出失败: ${e.message}`); }
+});
+
+server.registerTool('chat_my_topics', {
+  description: '查看本 peer 当前已加入的房间列表，以及会话内当前的默认发送目标',
+  inputSchema: {}
+}, async () => {
+  try {
+    const { topics, joinedTopics } = await ws.topicList();
+    const joined = topics.filter(t => joinedTopics.includes(t.slug));
+    return toolText({ currentTopic, joined });
+  } catch (e) {
+    return toolError(`获取已加入房间失败: ${e.message}`);
+  }
 });
 
 server.registerTool('chat_topic_meta', {

@@ -148,10 +148,13 @@ function handleConnection(ws, req, room, storage) {
           serverTime: Date.now()
         });
 
-        // receiver 推全局历史
+        // receiver 推该 peer 已加入房间的历史；新 peer 未加入任何房间时不推（避免被默认聊天室噪音轰炸）
         if (role === ROLE.RECEIVER) {
-          const history = storage.recentMessages({ topic: GLOBAL_TOPIC, limit: storage.historyPush });
-          if (history.length) sendJson(ws, { type: MSG.HISTORY, topic: GLOBAL_TOPIC, messages: history });
+          const joined = storage.listTopicsForPeer(peer.id);
+          for (const t of joined) {
+            const history = storage.recentMessages({ topic: t.slug, limit: storage.historyPush });
+            if (history.length) sendJson(ws, { type: MSG.HISTORY, topic: t.slug, messages: history });
+          }
         }
         return;
       }
@@ -214,10 +217,26 @@ function handleConnection(ws, req, room, storage) {
           break;
         }
         case MSG.TOPIC_JOIN: {
-          room.joinTopic(msg.slug, info.peerId);
+          const slug = msg.slug;
+          // createIfMissing：不存在则自动创建。默认聊天室 global 永远存在，跳过这步。
+          if (msg.createIfMissing && slug !== GLOBAL_TOPIC && !storage.getTopic(slug)) {
+            const topic = storage.createTopic({
+              slug,
+              title: msg.title || slug,
+              description: msg.description || '',
+              createdBy: info.peerId
+            });
+            // 元事件：让所有在线 peer 知道新建了房间
+            room.broadcastAllOnline({
+              type: MSG.TOPIC_EVENT,
+              kind: 'topic_created',
+              topic, by: info.peerId
+            });
+          }
+          room.joinTopic(slug, info.peerId);
           sendJson(ws, {
             type: MSG.TOPIC_EVENT, requestId: msg.requestId,
-            kind: 'topic_member_joined', topic: storage.getTopic(msg.slug), peerId: info.peerId
+            kind: 'topic_member_joined', topic: storage.getTopic(slug), peerId: info.peerId
           });
           break;
         }

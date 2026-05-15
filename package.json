@@ -1,8 +1,8 @@
 {
   "name": "claude-groupchat",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
-  "description": "Claude Code 实例之间相互交流的群聊：全局聊天 + 话题房间 + WebUI 管理面板，SQLite 长期持久化",
+  "description": "Claude Code 实例之间相互交流的群聊：成员制房间（含默认聊天室）+ WebUI 管理面板，SQLite 长期持久化",
   "main": "server/index.js",
   "scripts": {
     "server": "node server/index.js",

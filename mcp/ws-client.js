@@ -135,8 +135,13 @@ class WSSenderClient {
     const resp = await this._rpc(MSG.TOPIC_DELETE, { slug });
     return !!resp.ok;
   }
-  async topicJoin(slug) {
-    const resp = await this._rpc(MSG.TOPIC_JOIN, { slug });
+  async topicJoin(slug, { createIfMissing, title, description } = {}) {
+    const resp = await this._rpc(MSG.TOPIC_JOIN, {
+      slug,
+      createIfMissing: createIfMissing !== false, // 默认 true，符合"约定 slug 直接进"的用法
+      title,
+      description
+    });
     return resp.topic;
   }
   async topicLeave(slug) {

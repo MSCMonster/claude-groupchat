@@ -218,20 +218,15 @@
 
   function renderPeers() {
     dom.peersList.innerHTML = '';
-    let list;
-    if (state.currentTopic === 'global') {
-      list = state.peers.slice();
-    } else {
-      // 显示话题成员，附加在线状态
-      const onlineSet = new Set(state.peers.filter(p => p.isOnline).map(p => p.id));
-      list = state.members.map(m => ({
-        id: m.peerId,
-        label: m.label,
-        hostname: m.hostname,
-        projectDir: m.projectDir,
-        isOnline: onlineSet.has(m.peerId)
-      }));
-    }
+    // 0.3.0 起所有房间（含默认聊天室）都是成员制，统一按成员表显示
+    const onlineSet = new Set(state.peers.filter(p => p.isOnline).map(p => p.id));
+    const list = state.members.map(m => ({
+      id: m.peerId,
+      label: m.label,
+      hostname: m.hostname,
+      projectDir: m.projectDir,
+      isOnline: onlineSet.has(m.peerId)
+    }));
     if (list.length === 0) {
       dom.peersList.innerHTML = '<li style="color:#6b7480;padding:6px 10px;font-size:12px">暂无</li>';
       return;
