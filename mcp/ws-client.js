@@ -163,6 +163,10 @@ class WSSenderClient {
     const resp = await this._rpc(MSG.TOPIC_TODO_DELETE, { id });
     return !!resp.ok;
   }
+  async topicBatch(slug, ops) {
+    const resp = await this._rpc(MSG.TOPIC_BATCH, { slug, ops }, { timeoutMs: 15000 });
+    return { topic: resp.topic, results: resp.results || [] };
+  }
 
   close() {
     this.shouldReconnect = false;

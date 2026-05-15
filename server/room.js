@@ -288,6 +288,92 @@ class Room {
     return ok;
   }
 
+  // ===== 批量操作 =====
+  // 在同一话题内原子地执行多个 op：
+  //   { op:'todo_add', content }
+  //   { op:'todo_update', id, content?, done? }
+  //   { op:'todo_delete', id }
+  //   { op:'meta_set', title?, description?, announcement? }
+  // 全部成功后只 broadcast 一次 TOPIC_EVENT(kind='topic_batch')
+  batchTopicOps({ slug, ops, by }) {
+    if (!slug) throw new Error('slug 必填');
+    if (!Array.isArray(ops) || ops.length === 0) throw new Error('ops 不能为空');
+    if (!this.storage.getTopic(slug)) throw new Error(`话题不存在: ${slug}`);
+
+    // 在事务里跑：任一 op 抛错则整笔回滚，不会留下半成品状态
+    const changes = this.storage.transaction(() => {
+      const acc = [];
+      for (const raw of ops) {
+        const op = raw && raw.op;
+        switch (op) {
+          case 'todo_add': {
+            const todo = this.storage.addTodo({
+              topicSlug: slug, content: raw.content, createdBy: by || null
+            });
+            acc.push({ op, todo });
+            break;
+          }
+          case 'todo_update': {
+            const id = Number(raw.id);
+            // 校验 TODO 属于当前 slug，防止跨话题误改
+            const cur = this.storage.getTodo(id);
+            if (!cur) throw new Error(`TODO 不存在: ${id}`);
+            if (cur.topicSlug !== slug) {
+              throw new Error(`TODO ${id} 不属于话题 ${slug}`);
+            }
+            const todo = this.storage.updateTodo(id, {
+              content: raw.content, done: raw.done
+            });
+            acc.push({ op, todo });
+            break;
+          }
+          case 'todo_delete': {
+            const id = Number(raw.id);
+            const cur = this.storage.getTodo(id);
+            if (!cur) throw new Error(`TODO 不存在: ${id}`);
+            if (cur.topicSlug !== slug) {
+              throw new Error(`TODO ${id} 不属于话题 ${slug}`);
+            }
+            const ok = this.storage.deleteTodo(id);
+            if (!ok) throw new Error(`删除 TODO 失败: ${id}`);
+            acc.push({ op, todoId: id });
+            break;
+          }
+          case 'meta_set': {
+            this.storage.updateTopicMeta(slug, {
+              title: raw.title,
+              description: raw.description,
+              announcement: raw.announcement
+            });
+            // 仅记录有变更的字段名，便于订阅端理解；topic 全量在外层带
+            const fields = ['title', 'description', 'announcement']
+              .filter(k => raw[k] !== undefined);
+            acc.push({ op, fields });
+            break;
+          }
+          default:
+            throw new Error(`未知 op: ${op}`);
+        }
+      }
+      return acc;
+    });
+
+    const topic = this.storage.getTopic(slug);
+    const event = {
+      type: MSG.TOPIC_EVENT,
+      kind: 'topic_batch',
+      topic,
+      changes,
+      by: by || null,
+      ts: Date.now()
+    };
+    // global 全员可见；其它 topic 仅成员
+    if (slug === GLOBAL_TOPIC) this.broadcastGlobal(event);
+    else this.broadcastTopic(slug, event);
+    log.info(`批量话题操作 slug=${slug} ops=${ops.length} by=${by || '-'}`);
+    return { topic, changes };
+  }
+
   // 给 webUI 用：以 system 身份发送（topic 可空 = global）
   async systemSend({ body, attachments, topic }) {
     return this.handleSend(SYSTEM_PEER_ID, body, attachments, topic || GLOBAL_TOPIC);

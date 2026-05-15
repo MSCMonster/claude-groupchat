@@ -21,6 +21,7 @@ const MSG = {
   TOPIC_TODO_ADD: 'topic_todo_add',
   TOPIC_TODO_UPDATE: 'topic_todo_update',
   TOPIC_TODO_DELETE: 'topic_todo_delete',
+  TOPIC_BATCH: 'topic_batch',    // 单话题内多 op 原子执行（减少 broadcast 次数）
 
   // Server → Client
   HELLO_ACK: 'hello_ack',        // 握手响应

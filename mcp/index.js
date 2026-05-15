@@ -22,7 +22,7 @@ const inbox = new Inbox(process.cwd());
 const ws = new WSSenderClient();
 
 const server = new McpServer(
-  { name: 'claude-groupchat', version: '0.2.0' },
+  { name: 'claude-groupchat', version: '0.2.1' },
   { capabilities: { tools: {} } }
 );
 
@@ -271,6 +271,37 @@ server.registerTool('chat_topic_todo_delete', {
     const ok = await ws.topicTodoDelete(id);
     return toolText({ status: ok ? 'deleted' : 'not_found' });
   } catch (e) { return toolError(`删除 TODO 失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_batch', {
+  description: '在同一话题房间内原子地执行一批操作（TODO 增/改/删 + meta 更新）。' +
+    '所有 op 走单个事务：任一失败整体回滚，成功后订阅端只收到一条 topic_batch 事件，' +
+    '避免逐条 broadcast 造成的通知刷屏。' +
+    '\n\nop 列表：' +
+    '\n  { op:"todo_add", content }            // 新增 TODO' +
+    '\n  { op:"todo_update", id, content?, done? }  // 更新 TODO（id 必须属于本话题）' +
+    '\n  { op:"todo_delete", id }              // 删除 TODO' +
+    '\n  { op:"meta_set", title?, description?, announcement? }  // 更新房间元数据/公告',
+  inputSchema: {
+    slug: z.string().describe('话题 slug，例 global / sandbox-files'),
+    ops: z.array(z.object({
+      op: z.enum(['todo_add', 'todo_update', 'todo_delete', 'meta_set'])
+        .describe('操作类型'),
+      id: z.number().int().optional().describe('todo_update / todo_delete 的 TODO id'),
+      content: z.string().optional().describe('todo_add 必填；todo_update 选填'),
+      done: z.boolean().optional().describe('todo_update 选填'),
+      title: z.string().optional().describe('meta_set 选填'),
+      description: z.string().optional().describe('meta_set 选填'),
+      announcement: z.string().optional().describe('meta_set 选填')
+    })).min(1).describe('要执行的操作数组，最少 1 条')
+  }
+}, async ({ slug, ops }) => {
+  try {
+    const result = await ws.topicBatch(slug, ops);
+    return toolText({ status: 'ok', ...result });
+  } catch (e) {
+    return toolError(`批量操作失败: ${e.message}`);
+  }
 });
 
 // ===== 辅助 =====

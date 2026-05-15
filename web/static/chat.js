@@ -582,7 +582,8 @@
       default:
         if (['topic_created', 'topic_deleted', 'topic_meta_updated',
              'topic_member_joined', 'topic_member_left',
-             'topic_todo_added', 'topic_todo_updated', 'topic_todo_deleted'].indexOf(ev.kind) >= 0) {
+             'topic_todo_added', 'topic_todo_updated', 'topic_todo_deleted',
+             'topic_batch'].indexOf(ev.kind) >= 0) {
           refreshTopics();
           if (ev.topic && ev.topic.slug === state.currentTopic) {
             loadTopicMeta(state.currentTopic);

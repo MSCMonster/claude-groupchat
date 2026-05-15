@@ -304,6 +304,10 @@
     } else if (['topic_member_joined', 'topic_member_left',
                 'topic_todo_added', 'topic_todo_updated', 'topic_todo_deleted'].indexOf(ev.kind) >= 0) {
       if (ev.topic && ev.topic.slug === state.currentSlug) loadDetail(state.currentSlug);
+    } else if (ev.kind === 'topic_batch') {
+      // 批量事件可能同时影响 meta + todo + 成员，稳妥起见两边都刷
+      refreshTopics();
+      if (ev.topic && ev.topic.slug === state.currentSlug) loadDetail(state.currentSlug);
     } else if (ev.type === 'peer_join' || ev.type === 'peer_leave') {
       refreshPeers();
     }

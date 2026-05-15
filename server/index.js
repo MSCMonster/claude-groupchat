@@ -251,6 +251,16 @@ function handleConnection(ws, req, room, storage) {
           sendJson(ws, { type: MSG.TOPIC_EVENT, requestId: msg.requestId, kind: 'topic_todo_deleted', ok });
           break;
         }
+        case MSG.TOPIC_BATCH: {
+          const { topic, changes } = room.batchTopicOps({
+            slug: msg.slug, ops: msg.ops, by: info.peerId
+          });
+          sendJson(ws, {
+            type: MSG.TOPIC_BATCH, requestId: msg.requestId,
+            slug: topic.slug, topic, results: changes
+          });
+          break;
+        }
 
         default:
           sendError(ws, msg.requestId, `未知消息类型: ${msg.type}`);

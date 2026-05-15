@@ -91,6 +91,17 @@ function buildPreview(entry) {
       return `[#${entry.topic && entry.topic.slug}] TODO 更新：${truncate(entry.todo && entry.todo.content, 40)}${entry.todo && entry.todo.done ? ' ✓' : ''}`;
     case 'topic_todo_deleted':
       return `[#${entry.topic && entry.topic.slug}] TODO 删除 id=${entry.todoId}`;
+    case 'topic_batch': {
+      const changes = Array.isArray(entry.changes) ? entry.changes : [];
+      const counts = { todo_add: 0, todo_update: 0, todo_delete: 0, meta_set: 0 };
+      for (const c of changes) { if (counts[c.op] !== undefined) counts[c.op] += 1; }
+      const parts = [];
+      if (counts.todo_add) parts.push(`+${counts.todo_add} TODO`);
+      if (counts.todo_update) parts.push(`~${counts.todo_update} TODO`);
+      if (counts.todo_delete) parts.push(`-${counts.todo_delete} TODO`);
+      if (counts.meta_set) parts.push('meta');
+      return `[#${entry.topic && entry.topic.slug}] 批量更新 ${changes.length} 项 (${parts.join(', ') || '无变更'})`;
+    }
     case 'history':
       return `服务器历史 ${entry.messages ? entry.messages.length : 0} 条`;
     default:
@@ -188,13 +199,14 @@ function connect() {
           });
           break;
         case MSG.TOPIC_EVENT:
-          // 子类型直接用作 entry.kind
+          // 子类型直接用作 entry.kind；topic_batch 额外带 changes 数组
           await recordEvent({
             kind: msg.kind || 'topic_event',
             topic: msg.topic || null,
             peerId: msg.peerId || null,
             todo: msg.todo || null,
             todoId: msg.todoId || null,
+            changes: Array.isArray(msg.changes) ? msg.changes : undefined,
             by: msg.by || null
           });
           break;

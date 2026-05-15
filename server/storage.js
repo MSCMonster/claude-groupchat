@@ -413,6 +413,13 @@ class Storage {
     `).all(topicSlug).map(rowToTodo);
   }
 
+  // ===== 事务包装 =====
+  // 把多个同步写操作绑成一笔事务；失败整体回滚
+  // 仅同步函数有效（better-sqlite3 限制：事务回调不能 await）
+  transaction(fn) {
+    return this.db.transaction(fn)();
+  }
+
   async close() {
     try { this.db.close(); } catch { /* ignore */ }
   }
