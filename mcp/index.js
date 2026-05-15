@@ -1,13 +1,11 @@
 // MCP server 入口（stdio transport）
-// 暴露聊天工具给 Claude Code 调用
+// 暴露聊天工具给 Claude Code 调用：发消息 / 拉消息 / 文件 / 话题房间
 'use strict';
 require('dotenv').config();
 
-// MCP server 通过 stdio 与 Claude Code 通信，stdout 是协议通道
-// 必须让 logger 控制台输出走 stderr，避免污染 MCP 协议
+// stdout 是 MCP 协议通道，logger 必须走 stderr
 process.env.LOG_TO_STDERR = 'true';
 
-const path = require('path');
 const { z } = require('zod');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
@@ -24,20 +22,24 @@ const inbox = new Inbox(process.cwd());
 const ws = new WSSenderClient();
 
 const server = new McpServer(
-  { name: 'claude-groupchat', version: '0.1.0' },
+  { name: 'claude-groupchat', version: '0.2.0' },
   { capabilities: { tools: {} } }
 );
 
 // ===== 工具：发送消息 =====
 server.registerTool('chat_send', {
-  description: '向群聊广播一条消息（除自己之外的所有客户端会收到）。' +
-    '可选 attachments 是本地文件路径数组，工具会上传后把 fileId/url 附加到消息里。',
+  description: '向群聊广播一条消息。' +
+    '默认发到全局聊天室；指定 topic 则只在该话题房间内可见。' +
+    '可在正文里用 @topic:<slug> 提及话题房间（例：邀请其他人加入）。' +
+    'attachments 是本地文件路径数组，工具会上传后把 fileId/url 附加到消息里。',
   inputSchema: {
     body: z.string().describe('消息正文'),
     attachments: z.array(z.string()).optional()
-      .describe('可选：本地文件路径数组，会上传并附在消息里发出')
+      .describe('可选：本地文件路径数组，会上传并附在消息里发出'),
+    topic: z.string().optional()
+      .describe('可选：话题房间 slug。不传 = global 全局聊天室；非 global 时发送者必须是该房间成员')
   }
-}, async ({ body, attachments }) => {
+}, async ({ body, attachments, topic }) => {
   const uploaded = [];
   if (Array.isArray(attachments) && attachments.length) {
     for (const p of attachments) {
@@ -57,13 +59,14 @@ server.registerTool('chat_send', {
   }
 
   try {
-    await ws.send(body, uploaded);
+    await ws.send(body, uploaded, topic);
   } catch (e) {
     return toolError(`发送失败: ${e.message}`);
   }
 
   return toolText({
     status: 'sent',
+    topic: topic || 'global',
     body,
     attachments: uploaded
   });
@@ -84,7 +87,7 @@ server.registerTool('chat_peers', {
 
 // ===== 工具：拉取未读消息 =====
 server.registerTool('chat_pull', {
-  description: '从本地 inbox 拉取所有未读事件（消息、加入/离开通知等），默认会标记为已读。' +
+  description: '从本地 inbox 拉取所有未读事件（消息、加入/离开通知、话题事件等），默认会标记为已读。' +
     '收到 Monitor 通知后应当用这个工具拿到完整内容。',
   inputSchema: {
     mark_read: z.boolean().optional()
@@ -123,15 +126,17 @@ server.registerTool('chat_inbox_stats', {
 
 // ===== 工具：拉服务器历史 =====
 server.registerTool('chat_history', {
-  description: '从 server 拉取最近的群聊历史消息（server 端 Redis 存储，重启即清空）',
+  description: '从 server 拉取最近的群聊历史消息（SQLite 长期持久化）。可指定 topic',
   inputSchema: {
     count: z.number().int().positive().optional()
-      .describe('拉取条数，默认 20')
+      .describe('拉取条数，默认 20'),
+    topic: z.string().optional()
+      .describe('可选：话题房间 slug，不传 = global')
   }
-}, async ({ count }) => {
+}, async ({ count, topic }) => {
   try {
-    const messages = await ws.getHistory(count || 20);
-    return toolText({ messages });
+    const messages = await ws.getHistory(count || 20, topic);
+    return toolText({ topic: topic || 'global', messages });
   } catch (e) {
     return toolError(`拉取历史失败: ${e.message}`);
   }
@@ -159,6 +164,115 @@ server.registerTool('chat_download', {
   }
 });
 
+// ===== 话题房间工具 =====
+server.registerTool('chat_topic_list', {
+  description: '列出所有话题房间，并标出本 peer 已加入的房间',
+  inputSchema: {}
+}, async () => {
+  try { return toolText(await ws.topicList()); }
+  catch (e) { return toolError(`获取话题列表失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_create', {
+  description: '创建一个新的话题房间。slug 是 URL 友好标识（字母/数字/_-:.）。' +
+    '默认创建后自动加入；autoJoin=false 仅创建不加入。',
+  inputSchema: {
+    slug: z.string().describe('唯一标识，1-64 字符，支持 a-zA-Z0-9_-:.'),
+    title: z.string().optional().describe('展示标题，默认与 slug 相同'),
+    description: z.string().optional().describe('简介'),
+    autoJoin: z.boolean().optional().describe('是否自动加入，默认 true')
+  }
+}, async ({ slug, title, description, autoJoin }) => {
+  try {
+    const topic = await ws.topicCreate({ slug, title, description, autoJoin });
+    return toolText({ status: 'created', topic });
+  } catch (e) {
+    return toolError(`创建话题失败: ${e.message}`);
+  }
+});
+
+server.registerTool('chat_topic_join', {
+  description: '加入一个已存在的话题房间，之后才能在该话题内收发消息',
+  inputSchema: { slug: z.string().describe('话题 slug') }
+}, async ({ slug }) => {
+  try {
+    const topic = await ws.topicJoin(slug);
+    return toolText({ status: 'joined', topic });
+  } catch (e) { return toolError(`加入失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_leave', {
+  description: '退出一个话题房间。退出后该房间的消息不再推送给你',
+  inputSchema: { slug: z.string().describe('话题 slug') }
+}, async ({ slug }) => {
+  try {
+    const topic = await ws.topicLeave(slug);
+    return toolText({ status: 'left', topic });
+  } catch (e) { return toolError(`退出失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_meta', {
+  description: '查看话题房间的元数据：标题、简介、群公告、TODO 列表、成员列表',
+  inputSchema: { slug: z.string().describe('话题 slug，例 global / api-design') }
+}, async ({ slug }) => {
+  try {
+    const meta = await ws.topicMetaGet(slug);
+    return toolText(meta);
+  } catch (e) { return toolError(`获取元数据失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_meta_set', {
+  description: '更新话题房间元数据。任意字段可选；未提供的保持不变',
+  inputSchema: {
+    slug: z.string().describe('话题 slug'),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    announcement: z.string().optional().describe('群公告（类似置顶通知）')
+  }
+}, async ({ slug, title, description, announcement }) => {
+  try {
+    const topic = await ws.topicMetaSet(slug, { title, description, announcement });
+    return toolText({ status: 'updated', topic });
+  } catch (e) { return toolError(`更新失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_todo_add', {
+  description: '在话题房间下新增一条 TODO/事项',
+  inputSchema: {
+    slug: z.string().describe('话题 slug'),
+    content: z.string().describe('TODO 内容')
+  }
+}, async ({ slug, content }) => {
+  try {
+    const todo = await ws.topicTodoAdd(slug, content);
+    return toolText({ status: 'added', todo });
+  } catch (e) { return toolError(`添加 TODO 失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_todo_update', {
+  description: '更新一条 TODO 的内容或完成状态',
+  inputSchema: {
+    id: z.number().int().describe('TODO id'),
+    content: z.string().optional(),
+    done: z.boolean().optional()
+  }
+}, async ({ id, content, done }) => {
+  try {
+    const todo = await ws.topicTodoUpdate(id, { content, done });
+    return toolText({ status: 'updated', todo });
+  } catch (e) { return toolError(`更新 TODO 失败: ${e.message}`); }
+});
+
+server.registerTool('chat_topic_todo_delete', {
+  description: '删除一条 TODO',
+  inputSchema: { id: z.number().int().describe('TODO id') }
+}, async ({ id }) => {
+  try {
+    const ok = await ws.topicTodoDelete(id);
+    return toolText({ status: ok ? 'deleted' : 'not_found' });
+  } catch (e) { return toolError(`删除 TODO 失败: ${e.message}`); }
+});
+
 // ===== 辅助 =====
 function toolText(obj) {
   return {
@@ -183,7 +297,6 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info('MCP server 启动完成 (stdio)');
-  // 提前连一次 WS（失败也无所谓，工具调用时会再 ensureConnected）
   ws.ensureConnected().catch(e => log.warn(`预连 WS 失败（工具调用时会重试）: ${e.message}`));
 }
 

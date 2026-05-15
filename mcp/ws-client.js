@@ -1,5 +1,5 @@
 // WS sender 客户端：MCP server 内部使用
-// 负责连接到 chat server、发送消息、调用 RPC（list_peers / get_history）
+// 负责连接到 chat server、发送消息、调用 RPC（list_peers / get_history / topic_*）
 'use strict';
 const { randomUUID } = require('crypto');
 const WebSocket = require('ws');
@@ -15,7 +15,7 @@ class WSSenderClient {
     this.peer = buildPeer({ projectDir: process.cwd() });
     this.ws = null;
     this.connected = false;
-    this.pendingRpc = new Map(); // requestId -> { resolve, reject, timer }
+    this.pendingRpc = new Map();
     this.connectingPromise = null;
     this.shouldReconnect = true;
     this.reconnectMs = 1000;
@@ -61,7 +61,6 @@ class WSSenderClient {
       ws.on('close', (code, reason) => {
         log.info(`WS 关闭 code=${code} reason=${reason}`);
         this.connected = false;
-        // 把所有 pending RPC 用错误结束
         for (const [, p] of this.pendingRpc) {
           clearTimeout(p.timer);
           p.reject(new Error('WS 连接断开'));
@@ -88,7 +87,7 @@ class WSSenderClient {
     else pending.resolve(msg);
   }
 
-  async _rpc(type, payload = {}, { timeoutMs = 5000 } = {}) {
+  async _rpc(type, payload = {}, { timeoutMs = 8000 } = {}) {
     await this.ensureConnected();
     const requestId = randomUUID();
     const req = { type, requestId, ...payload };
@@ -103,11 +102,11 @@ class WSSenderClient {
   }
 
   // ===== 对外 API =====
-  async send(body, attachments) {
+  async send(body, attachments, topic) {
     await this.ensureConnected();
-    // SEND 是单向广播，server 不回 ack；不等响应
     this.ws.send(JSON.stringify({
       type: MSG.SEND,
+      topic: topic || undefined,
       body: String(body || ''),
       attachments: Array.isArray(attachments) ? attachments : []
     }));
@@ -118,9 +117,51 @@ class WSSenderClient {
     return resp.peers || [];
   }
 
-  async getHistory(count = 20) {
-    const resp = await this._rpc(MSG.GET_HISTORY, { count });
+  async getHistory(count = 20, topic) {
+    const resp = await this._rpc(MSG.GET_HISTORY, { count, topic: topic || undefined });
     return resp.messages || [];
+  }
+
+  // 话题房间
+  async topicList() {
+    const resp = await this._rpc(MSG.TOPIC_LIST);
+    return { topics: resp.topics || [], joinedTopics: resp.joinedTopics || [] };
+  }
+  async topicCreate({ slug, title, description, autoJoin }) {
+    const resp = await this._rpc(MSG.TOPIC_CREATE, { slug, title, description, autoJoin });
+    return resp.topic;
+  }
+  async topicDelete(slug) {
+    const resp = await this._rpc(MSG.TOPIC_DELETE, { slug });
+    return !!resp.ok;
+  }
+  async topicJoin(slug) {
+    const resp = await this._rpc(MSG.TOPIC_JOIN, { slug });
+    return resp.topic;
+  }
+  async topicLeave(slug) {
+    const resp = await this._rpc(MSG.TOPIC_LEAVE, { slug });
+    return resp.topic;
+  }
+  async topicMetaGet(slug) {
+    const resp = await this._rpc(MSG.TOPIC_META_GET, { slug });
+    return { topic: resp.topic, todos: resp.todos || [], members: resp.members || [] };
+  }
+  async topicMetaSet(slug, { title, description, announcement }) {
+    const resp = await this._rpc(MSG.TOPIC_META_SET, { slug, title, description, announcement });
+    return resp.topic;
+  }
+  async topicTodoAdd(slug, content) {
+    const resp = await this._rpc(MSG.TOPIC_TODO_ADD, { slug, content });
+    return resp.todo;
+  }
+  async topicTodoUpdate(id, { content, done }) {
+    const resp = await this._rpc(MSG.TOPIC_TODO_UPDATE, { id, content, done });
+    return resp.todo;
+  }
+  async topicTodoDelete(id) {
+    const resp = await this._rpc(MSG.TOPIC_TODO_DELETE, { id });
+    return !!resp.ok;
   }
 
   close() {
