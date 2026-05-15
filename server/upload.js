@@ -28,27 +28,32 @@ function buildRouter({ storage }) {
     limits: { fileSize: maxBytes }
   });
 
-  // POST /upload —— 字段名 file
-  router.post('/upload', upload.single('file'), async (req, res) => {
+  // POST /upload —— 字段名 file；可选 query.peerId 标识上传者
+  router.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: '缺少文件字段 file' });
     }
 
     // multer 默认按 latin1 解析 multipart 文件名，中文会乱码
     const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    const uploadedBy = req.query.peerId
+      || (req.session && req.session.user ? `webui:${req.session.user}` : null);
 
     try {
-      const meta = await storage.registerFile({
+      const meta = storage.registerFile({
         originalName,
         mimeType: req.file.mimetype,
         size: req.file.size,
-        storedPath: req.file.path
+        storedPath: req.file.path,
+        uploadedBy
       });
       res.json({
         fileId: meta.fileId,
         filename: meta.filename,
         size: meta.size,
-        mimeType: meta.mimeType
+        mimeType: meta.mimeType,
+        uploadedBy: meta.uploadedBy,
+        createdAt: meta.createdAt
       });
     } catch (err) {
       log.error(`登记文件失败: ${err.message}`);
@@ -58,27 +63,23 @@ function buildRouter({ storage }) {
   });
 
   // GET /download?fileId=xxx 或 /download?filename=xxx
-  router.get('/download', async (req, res) => {
+  router.get('/download', (req, res) => {
     const { fileId, filename } = req.query;
     if (!fileId && !filename) {
       return res.status(400).json({ error: '需要 fileId 或 filename 参数' });
     }
 
     let meta = null;
-    if (fileId) {
-      meta = await storage.getFileById(String(fileId));
-    } else if (filename) {
-      meta = await storage.getFileByName(String(filename));
-    }
+    if (fileId) meta = storage.getFileById(String(fileId));
+    else if (filename) meta = storage.getFileByName(String(filename));
 
-    if (!meta) return res.status(404).json({ error: '文件不存在或已过期' });
+    if (!meta) return res.status(404).json({ error: '文件不存在' });
     if (!fs.existsSync(meta.storedPath)) {
       return res.status(410).json({ error: '文件已被清理' });
     }
 
     const ct = meta.mimeType || mime.lookup(meta.filename) || 'application/octet-stream';
     res.setHeader('Content-Type', ct);
-    // 文件名做 RFC 5987 编码以支持中文
     const safeName = encodeURIComponent(meta.filename);
     res.setHeader('Content-Disposition',
       `attachment; filename="${safeName}"; filename*=UTF-8''${safeName}`);
@@ -94,15 +95,16 @@ function buildRouter({ storage }) {
   });
 
   // 文件元数据查询（debug 用）
-  router.get('/files/:fileId', async (req, res) => {
-    const meta = await storage.getFileById(req.params.fileId);
+  router.get('/files/:fileId', (req, res) => {
+    const meta = storage.getFileById(req.params.fileId);
     if (!meta) return res.status(404).json({ error: '文件不存在' });
     res.json({
       fileId: meta.fileId,
       filename: meta.filename,
       size: meta.size,
       mimeType: meta.mimeType,
-      createdAt: meta.createdAt
+      createdAt: meta.createdAt,
+      uploadedBy: meta.uploadedBy
     });
   });
 

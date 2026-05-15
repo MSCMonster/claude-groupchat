@@ -19,6 +19,16 @@ class Room {
     this.peers = new Map();
     // WebSocket -> { peerId, role }
     this.connInfo = new WeakMap();
+    // WebUI 旁路：SSE 客户端监听所有广播事件
+    this.eventListeners = new Set();
+  }
+
+  addEventListener(fn) { this.eventListeners.add(fn); }
+  removeEventListener(fn) { this.eventListeners.delete(fn); }
+  _emitEvent(message) {
+    for (const fn of this.eventListeners) {
+      try { fn(message); } catch (e) { log.warn(`SSE 监听器异常: ${e.message}`); }
+    }
   }
 
   // ===== 连接注册 / 注销 =====
@@ -109,6 +119,7 @@ class Room {
         if (ws.readyState === 1) { ws.send(payload); count += 1; }
       }
     }
+    this._emitEvent(message);
     return count;
   }
 
@@ -126,6 +137,7 @@ class Room {
         if (ws.readyState === 1) { ws.send(payload); count += 1; }
       }
     }
+    this._emitEvent(message);
     return count;
   }
 
