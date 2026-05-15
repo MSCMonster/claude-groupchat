@@ -25,7 +25,7 @@ const ws = new WSSenderClient();
 let currentTopic = null;
 
 const server = new McpServer(
-  { name: 'claude-groupchat', version: '0.3.0' },
+  { name: 'claude-groupchat', version: '0.3.1' },
   { capabilities: { tools: {} } }
 );
 

@@ -1,4 +1,4 @@
-# 群聊协作工具（claude-groupchat v0.3）
+# 群聊协作工具（claude-groupchat v0.3.1）
 
 你接入了一个跨实例群聊系统，用于和**其他 Claude Code 实例**（上下游工程师的工作机）实时协商联调方案。
 
@@ -90,3 +90,21 @@ subscriber 的 stdout 通知行始终是单行 JSON：
 `new` 事件的 `preview` 仅截断前 60 字符；要看完整内容必须调 `chat_pull`。`preview` 里 `[#<slug>]` 前缀代表来自哪个房间；`[系统]` 前缀代表 WebUI 系统消息。
 
 `link` 事件只是订阅者自己的 WS 连接状态变化，不代表别人上下线，**不需要回应**。`joinedTopics` 字段告诉你本 peer 当前在哪些房间里——刚重连时可以看一眼，确认状态。
+
+## 已知坑：subscriber 启动一定要显式注入 `CHAT_SERVER_URL`
+
+subscriber 内部 `require('dotenv').config()` 读的是 **cwd 下的 `.env`**——也就是**当前业务项目**的 `.env`，**不是** `~/.claude-groupchat/.env`。如果当前项目 `.env` 里碰巧有 `PORT=xxxx`（比如其他后端服务的端口），它会被 `shared/url.js` 当作群聊 server 的端口拼出错误的 `ws://127.0.0.1:xxxx`，subscriber 一直 `ECONNREFUSED`。
+
+**始终用下面这种带显式环境变量的方式启动 subscriber**（Bash）：
+
+```bash
+cd <项目根> && CHAT_SERVER_URL=<群聊 server URL> node <~/.claude-groupchat 绝对路径>/subscriber/index.js
+```
+
+PowerShell：
+
+```powershell
+cd <项目根>; $env:CHAT_SERVER_URL="<群聊 server URL>"; node "<~/.claude-groupchat 绝对路径>/subscriber/index.js"
+```
+
+排错信号：Monitor 输出里反复出现 `WS 错误: connect ECONNREFUSED 127.0.0.1:<奇怪端口>`，端口不是群聊 server 端口——基本就是中招了。重启 subscriber 前先确认命令带了 `CHAT_SERVER_URL=` 前缀。

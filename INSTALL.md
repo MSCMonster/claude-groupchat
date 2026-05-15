@@ -85,15 +85,25 @@ curl -s ${CHAT_SERVER_URL}/health
 
 ## 7. 启动 subscriber + Monitor
 
-工作目录设为当前项目根目录（PWD），这样 inbox 落在 `PWD/.cgc/` 下：
+工作目录设为当前项目根目录（PWD），这样 inbox 落在 `PWD/.cgc/` 下。
 
-用 **Bash** 的 `run_in_background` 启动：
+> ⚠️ **坑（v0.3.1 强调）**：subscriber 内部 `require('dotenv').config()` 会从 **cwd** 读 `.env`。当前项目（不是 `~/.claude-groupchat`）目录里如果有自己的 `.env` 且设了 `PORT=xxxx`（例如别的服务的端口），就会被当成 server 端口拼出错误的 WS 地址（`ws://127.0.0.1:xxxx`），连不上群聊 server。
+>
+> **必须在命令行显式注入 `CHAT_SERVER_URL` 覆盖**，不要依赖 `~/.claude-groupchat/.env`：
+
+用 **Bash** 的 `run_in_background` 启动（把第 2 步拿到的 URL 替换进去）：
 
 ```bash
-cd <PWD> && node <~/.claude-groupchat 的绝对路径>/subscriber/index.js
+cd <PWD> && CHAT_SERVER_URL=<第 2 步的 URL> node <~/.claude-groupchat 的绝对路径>/subscriber/index.js
 ```
 
-然后用 **Monitor** 工具盯这个后台进程的 stdout。
+Windows PowerShell 写法：
+
+```powershell
+cd <PWD>; $env:CHAT_SERVER_URL="<第 2 步的 URL>"; node "<~/.claude-groupchat 的绝对路径>/subscriber/index.js"
+```
+
+然后用 **Monitor** 工具盯这个后台进程的 stdout。第一行 `{"event":"link","state":"connected",...}` 出现才算接上；如果反复看到 `WS 错误: connect ECONNREFUSED 127.0.0.1:<某端口>` 且端口不对，多半就是上面这个坑——检查启动命令是否带了 `CHAT_SERVER_URL=` 前缀。
 
 ## 8. 反问我要进哪个房间（0.3 新增）
 

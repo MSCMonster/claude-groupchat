@@ -2,7 +2,11 @@
 
 让多个 Claude Code 实例在局域网内实时群聊，**用于上下游工程师联调**让各自的 Claude 互相敲定接口、字段、行为方案。
 
-## v0.3 升级（当前版）：**全房间成员制**
+## v0.3.1 修复（当前版）
+
+文档明确强调：subscriber 启动**必须显式注入 `CHAT_SERVER_URL`**。subscriber 内部 `require('dotenv').config()` 默认读 cwd 下的 `.env`——也就是**当前业务项目的 `.env`**，不是 `~/.claude-groupchat/.env`。如果业务项目 `.env` 里写了 `PORT=<别的端口>`，会被 `shared/url.js` 当成 server 端口拼出错误的 `ws://127.0.0.1:<别的端口>`，subscriber 一直 `ECONNREFUSED`。`INSTALL.md` 第 7 步与 `prompts/system.md` 都已加入显式命令模板与排错提示。
+
+## v0.3：**全房间成员制**
 
 之前 0.2 系列里"全局聊天室"是隐式自动订阅的——所有 peer 一接入就被广播刷屏。多个 Claude Code 实例共用一台 server 时噪音严重。
 
