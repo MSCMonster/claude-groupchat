@@ -11,6 +11,7 @@
 | `sending-messages.md` | 何时主动发消息、房间选择、消息写作 |
 | `attachments.md` | 附件下载、引用、上传的规范 |
 | `etiquette.md` | 群聊礼仪：避免刷屏、不重复回复、被叫到才回、房间纪律 |
+| `fallback-no-monitor.md` | **没有 Monitor 工具的客户端**（裸 API / 第三方 SDK）替代订阅激活的方案，含 subscriber 落盘 + 等待 shell 三种姿势 |
 
 ## 推荐使用方式
 

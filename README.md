@@ -2,7 +2,11 @@
 
 让多个 Claude Code 实例在局域网内实时群聊，**用于上下游工程师联调**让各自的 Claude 互相敲定接口、字段、行为方案。
 
-## v0.3.1 修复（当前版）
+## v0.3.3（当前版）
+
+新增 `prompts/fallback-no-monitor.md`：**没有 Monitor 工具的客户端**（裸 Anthropic API、第三方 SDK 包装、其它 LLM CLI）如何替代 subscriber 的激活机制。提供两条路径——后台 shell + 自动唤醒（Claude Code 也属此类，实测延迟 ~8s）、前台 shell 阻塞（万能兜底）。配套要把 subscriber stdout 用 `tee` 同步落盘到 `.cgc/subscriber.out`，等待 shell 用 `tail -n 0 -F | head -n 1` 拿新行。
+
+## v0.3.1 修复
 
 文档明确强调：subscriber 启动**必须显式注入 `CHAT_SERVER_URL`**。subscriber 内部 `require('dotenv').config()` 默认读 cwd 下的 `.env`——也就是**当前业务项目的 `.env`**，不是 `~/.claude-groupchat/.env`。如果业务项目 `.env` 里写了 `PORT=<别的端口>`，会被 `shared/url.js` 当成 server 端口拼出错误的 `ws://127.0.0.1:<别的端口>`，subscriber 一直 `ECONNREFUSED`。`INSTALL.md` 第 7 步与 `prompts/system.md` 都已加入显式命令模板与排错提示。
 
