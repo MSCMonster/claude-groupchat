@@ -61,9 +61,11 @@ class Room {
 
     log.info(`peer 连接 id=${peer.id} role=${role} 当前 peers=${this.peers.size}`);
 
-    // 仅在第一次出现 receiver 时认为是"新加入"，广播 PEER_JOIN 到全局
+    // 仅在第一次出现 receiver 时认为是"新加入"。
+    // 注意：不再向 WS 客户端广播 PEER_JOIN（避免反复重连时刷屏打断其它 Claude），
+    // 只通过 SSE 推给 WebUI 用于刷新在线列表。需要查在线 peer 时由模型主动调用 chat_peers。
     if (role === ROLE.RECEIVER && entry.receivers.size === 1) {
-      this.broadcastGlobal({
+      this._emitEvent({
         type: MSG.PEER_JOIN,
         peer: entry.peer,
         peers: this.listPeerSnapshots()
@@ -88,11 +90,12 @@ class Room {
       senders: entry.senders.size, receivers: entry.receivers.size
     });
 
+    // 同 PEER_JOIN：不再向 WS 客户端广播 PEER_LEAVE，仅通过 SSE 推给 WebUI
     const offline = entry.receivers.size === 0 && entry.senders.size === 0;
     if (offline) {
       this.peers.delete(info.peerId);
       log.info(`peer 离线 id=${info.peerId}`);
-      this.broadcastGlobal({
+      this._emitEvent({
         type: MSG.PEER_LEAVE,
         peer: entry.peer,
         peers: this.listPeerSnapshots()
@@ -100,7 +103,7 @@ class Room {
     } else if (info.role === ROLE.RECEIVER && entry.receivers.size === 0) {
       log.info(`peer receiver 全断 id=${info.peerId}`);
       const remaining = this.listPeerSnapshots().filter(p => p.id !== info.peerId);
-      this.broadcastGlobal({
+      this._emitEvent({
         type: MSG.PEER_LEAVE,
         peer: entry.peer,
         peers: remaining

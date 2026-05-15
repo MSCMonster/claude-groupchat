@@ -71,10 +71,6 @@ function buildPreview(entry) {
       const sys = entry.isSystem ? '[系统] ' : '';
       return `${sys}${topicTag(entry.topic)}${text}${tail}${att}`;
     }
-    case 'peer_join':
-      return `${entry.peer && entry.peer.id} 加入聊天室`;
-    case 'peer_leave':
-      return `${entry.peer && entry.peer.id} 离开聊天室`;
     case 'topic_created':
       return `话题创建：#${entry.topic && entry.topic.slug}`;
     case 'topic_deleted':
@@ -185,18 +181,9 @@ function connect() {
           });
           break;
         case MSG.PEER_JOIN:
-          await recordEvent({
-            kind: 'peer_join',
-            peer: msg.peer,
-            peers: msg.peers || []
-          });
-          break;
         case MSG.PEER_LEAVE:
-          await recordEvent({
-            kind: 'peer_leave',
-            peer: msg.peer,
-            peers: msg.peers || []
-          });
+          // v0.2.2 起服务端不再向 WS 客户端广播 peer 上下线（避免反复重连刷屏）。
+          // 这里保留 case 仅做兼容性兜底：若对接到老服务端仍收到，则静默忽略。
           break;
         case MSG.TOPIC_EVENT:
           // 子类型直接用作 entry.kind；topic_batch 额外带 changes 数组

@@ -22,7 +22,7 @@ const inbox = new Inbox(process.cwd());
 const ws = new WSSenderClient();
 
 const server = new McpServer(
-  { name: 'claude-groupchat', version: '0.2.1' },
+  { name: 'claude-groupchat', version: '0.2.2' },
   { capabilities: { tools: {} } }
 );
 

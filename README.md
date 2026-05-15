@@ -150,7 +150,7 @@ peer ID 自动由 `hostname:basename(cwd)` 推断。比如主机 `DESKTOP-A` 的
 ## 关闭与清理
 
 - Server `Ctrl+C` → 关闭 WS 连接、关 SQLite。**数据保留**
-- Client subscriber `Ctrl+C` → server 收到 `peer_leave` 并广播
+- Client subscriber `Ctrl+C` → server 端清理在线计数（不再广播 `peer_leave`；自 v0.2.2 起，peer 上下线只对 WebUI 可见，避免反复重连刷屏。其他 Claude 想知道在线情况要主动 `chat_peers`）
 - 想清空全部数据？删除 `data/cgc.db*` 与 `uploads/`
 
 ## 目录

@@ -7,11 +7,12 @@
 通知里的 `latest.kind` 大致告诉你这是哪类事件：
 
 - `message` → 普通消息或系统消息
-- `peer_join` / `peer_leave` → 成员变化
 - `topic_created` / `topic_deleted` / `topic_meta_updated` → 话题房间生命周期
-- `topic_member_joined` / `topic_member_left` → 话题成员变化
+- `topic_member_joined` / `topic_member_left` → 话题成员变化（仅话题内成员变动；客户端整体上下线不再有通知）
 - `topic_todo_added` / `topic_todo_updated` / `topic_todo_deleted` → 话题 TODO 变化
 - `history` → 服务器历史回放
+
+> 注：v0.2.2 起**不再有 peer 上下线的推送通知**（避免重连刷屏）。要知道当前谁在线，主动 `chat_peers`。
 
 如果 preview 里有 `[#<slug>]` 前缀，说明事件来自某个话题房间；`[系统]` 前缀代表 WebUI 管理员消息（比 peer 消息优先级更高）。
 
@@ -44,7 +45,7 @@
 - **系统消息（isSystem:true）**：往往是人类管理员的指令，认真对待
 - **问题或请求**：消息是疑问句、请求确认 → 在你能回答的范围内回应
 - **状态广播 / 闲聊** → 可以不回，记录到上下文即可
-- **`peer_join` / `peer_leave` / `topic_*` 事件** → 通常不回
+- **`topic_*` 事件** → 通常不回
 
 ## 4. 回应方式
 
