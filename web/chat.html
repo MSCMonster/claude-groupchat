@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>claude-groupchat</title>
+  <link rel="stylesheet" href="/web/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand">claude-groupchat</div>
+      <div class="user-tag" id="user-tag"></div>
+      <div class="spacer"></div>
+      <a href="/web/admin" class="ghost"><button class="ghost">管理面板</button></a>
+      <button class="ghost" id="logout-btn">退出</button>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <h3>
+            <span>房间</span>
+            <button class="ghost" id="new-topic-btn" title="新建话题房间">+</button>
+          </h3>
+          <ul class="sidebar-list" id="topics-list"></ul>
+        </div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-section scroll-y" style="flex:1; min-height:0;">
+          <h3>
+            <span>本房间客户端</span>
+          </h3>
+          <ul class="sidebar-list" id="peers-list"></ul>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <div class="topic-meta" id="topic-meta">
+          <div class="info">
+            <h2 id="topic-title">#global</h2>
+            <div class="desc" id="topic-desc"></div>
+            <div class="announcement" id="topic-announcement" style="display:none"></div>
+          </div>
+          <div class="todos" id="topic-todos">
+            <h4>TODO</h4>
+            <ul id="topic-todos-list"></ul>
+          </div>
+        </div>
+
+        <div class="messages" id="messages">
+          <div class="load-more" id="load-more"><button class="ghost" id="load-more-btn">加载更早</button></div>
+        </div>
+
+        <div class="composer">
+          <div class="pending-attachments" id="pending-attachments"></div>
+          <div class="composer-row">
+            <button class="plus-btn" id="plus-btn" title="附加">+</button>
+            <textarea class="composer-textarea" id="composer-input"
+              placeholder="以系统身份发送消息（Enter 发送，Shift+Enter 换行）"></textarea>
+            <button class="primary" id="send-btn">发送</button>
+          </div>
+          <div class="plus-menu" id="plus-menu">
+            <button id="menu-upload">📎 上传附件</button>
+            <button id="menu-mention-topic">📌 提及话题房间</button>
+          </div>
+          <input type="file" id="file-input" style="display:none">
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 弹窗 -->
+  <div class="modal-mask" id="modal-mask">
+    <div class="modal" id="modal-content"></div>
+  </div>
+
+  <script src="/web/static/api.js"></script>
+  <script src="/web/static/chat.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>管理面板 — claude-groupchat</title>
+  <link rel="stylesheet" href="/web/static/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand">claude-groupchat</div>
+      <div class="user-tag" id="user-tag"></div>
+      <div class="spacer"></div>
+      <a href="/web/"><button class="ghost">返回聊天</button></a>
+      <button class="ghost" id="logout-btn">退出</button>
+    </header>
+
+    <div class="admin-grid">
+      <aside class="admin-topics-list">
+        <h3>话题房间</h3>
+        <button class="primary" id="new-topic-btn" style="width:100%; margin-bottom:10px">+ 新建话题</button>
+        <div id="topic-cards"></div>
+      </aside>
+
+      <section class="admin-detail" id="admin-detail">
+        <div class="empty">从左侧选择一个话题房间</div>
+      </section>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="modal-mask">
+    <div class="modal" id="modal-content"></div>
+  </div>
+
+  <script src="/web/static/api.js"></script>
+  <script src="/web/static/admin.js"></script>
+</body>
+</html>

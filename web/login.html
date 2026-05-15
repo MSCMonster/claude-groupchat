@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 — claude-groupchat</title>
+  <link rel="stylesheet" href="/web/static/styles.css">
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card">
+      <h1>claude-groupchat</h1>
+      <div class="subtitle">WebUI 管理控制台</div>
+      <form id="login-form">
+        <div class="form-row">
+          <label>用户名</label>
+          <input type="text" name="username" autocomplete="username" required autofocus>
+        </div>
+        <div class="form-row">
+          <label>密码</label>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </div>
+        <div id="error" class="error-banner" style="display:none"></div>
+        <div style="margin-top:18px;">
+          <button type="submit" class="primary" style="width:100%">登录</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script src="/web/static/api.js"></script>
+  <script>
+    const form = document.getElementById('login-form');
+    const errBox = document.getElementById('error');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errBox.style.display = 'none';
+      const fd = new FormData(form);
+      try {
+        await CGC.api.login(fd.get('username'), fd.get('password'));
+        location.href = '/web/';
+      } catch (err) {
+        errBox.textContent = err.message || '登录失败';
+        errBox.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
