@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>claude-groupchat</title>
+  <!-- GitHub 官方 markdown 样式（深色主题） -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-dark.min.css">
+  <!-- 代码高亮主题（GitHub Dark，匹配深色 UI） -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
   <link rel="stylesheet" href="/web/static/styles.css">
 </head>
 <body>
@@ -73,6 +79,12 @@
   <div class="modal-mask" id="modal-mask">
     <div class="modal" id="modal-content"></div>
   </div>
+
+  <!-- Markdown 渲染依赖（从 CDN 加载） -->
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked-highlight@2/lib/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 
   <script src="/web/static/api.js"></script>
   <script src="/web/static/chat.js"></script>

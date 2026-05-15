@@ -178,6 +178,54 @@ a:hover { text-decoration: underline; }
   color: #d4d8de; white-space: pre-wrap; word-wrap: break-word;
   margin-top: 2px;
 }
+/* 使用 GitHub 官方 markdown 样式（.markdown-body），仅做必要覆盖以融入聊天气泡 */
+.message .text.markdown-body {
+  background: transparent;          /* 默认是 #0d1117 卡片色，这里要透明 */
+  color: #d4d8de;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 0;
+  margin-top: 2px;
+  /* 关键：覆盖 .message .text 的 pre-wrap —— 否则 marked 输出 HTML 标签
+     之间的 \n 会被当成可见换行，导致 <li>/<p> 之间出现幽灵空行 */
+  white-space: normal;
+  word-wrap: break-word; overflow-wrap: anywhere;
+}
+/* 收紧首尾外边距，避免每条消息上下留白过多 */
+.message .text.markdown-body > *:first-child { margin-top: 0 !important; }
+.message .text.markdown-body > *:last-child  { margin-bottom: 0 !important; }
+/* 段落在聊天里希望更紧凑 */
+.message .text.markdown-body p { margin-top: 0; margin-bottom: 4px; }
+/* 列表收紧：覆盖 github-markdown-css 的默认 16px 间距以及 li>p 16px 上边距
+   —— 这是“松散列表”里 li 之间显得很空的根因（margin 在 li 内部的 <p> 上） */
+.message .text.markdown-body ul,
+.message .text.markdown-body ol {
+  margin-top: 0; margin-bottom: 4px; padding-left: 22px;
+}
+.message .text.markdown-body li + li { margin-top: 0; }
+.message .text.markdown-body li > p {
+  margin-top: 0; margin-bottom: 0;
+}
+.message .text.markdown-body li > p + p { margin-top: 4px; }
+.message .text.markdown-body ul ul,
+.message .text.markdown-body ul ol,
+.message .text.markdown-body ol ul,
+.message .text.markdown-body ol ol { margin-bottom: 0; }
+/* 引用 / 表格 / details 也统一收紧 */
+.message .text.markdown-body blockquote,
+.message .text.markdown-body table,
+.message .text.markdown-body dl,
+.message .text.markdown-body details { margin-top: 0; margin-bottom: 4px; }
+/* 代码块允许横向滚动，限制在消息宽度内，并收紧外边距 */
+.message .text.markdown-body pre { max-width: 100%; overflow-x: auto; margin-top: 0; margin-bottom: 4px; }
+/* 代码字体回退（github-markdown-css 默认引用了 ui-monospace 栈，这里追加常见中文 IDE 字体回退） */
+.message .text.markdown-body code,
+.message .text.markdown-body pre code {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, "Courier New",
+               ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+/* 让 highlight.js 主题接管 <pre><code> 的着色（github-markdown-css 自带的浅色不冲突，但这里强调一下背景透明对齐 hljs 主题色） */
+.message .text.markdown-body pre > code.hljs { padding: 0; background: transparent; }
 .message .attachments {
   margin-top: 6px; display: flex; flex-direction: column; gap: 4px;
 }

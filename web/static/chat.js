@@ -3,6 +3,47 @@
   'use strict';
   const { api, toast, openStream, escapeHtml, formatTs, formatBytes, avatarOf } = CGC;
 
+  // ===== Markdown 渲染初始化 =====
+  // 依赖通过 CDN 加载（marked / DOMPurify / highlight.js / marked-highlight）。
+  // 加载失败时退化为纯文本（escapeHtml + 保留换行）。
+  const md = (function initMarkdown() {
+    const ok = !!(window.marked && window.DOMPurify);
+    if (!ok) return null;
+    try {
+      // 代码高亮扩展（marked-highlight + highlight.js）
+      if (window.markedHighlight && window.hljs) {
+        window.marked.use(window.markedHighlight.markedHighlight({
+          langPrefix: 'hljs language-',
+          highlight(code, lang) {
+            const language = window.hljs.getLanguage(lang) ? lang : 'plaintext';
+            try {
+              return window.hljs.highlight(code, { language, ignoreIllegals: true }).value;
+            } catch {
+              return window.hljs.highlightAuto(code).value;
+            }
+          }
+        }));
+      }
+      window.marked.setOptions({
+        breaks: true,   // 单换行视为 <br>，更贴近聊天体验
+        gfm: true       // 启用 GitHub 风格扩展（表格、删除线、任务列表等）
+      });
+      return {
+        render(text) {
+          const raw = window.marked.parse(text || '');
+          // 净化，禁掉 <script>、on* 处理器等；保留常见富文本标签
+          return window.DOMPurify.sanitize(raw, {
+            USE_PROFILES: { html: true },
+            ADD_ATTR: ['target', 'rel']
+          });
+        }
+      };
+    } catch (e) {
+      console.warn('markdown 初始化失败，退化为纯文本：', e);
+      return null;
+    }
+  })();
+
   const state = {
     user: null,
     currentTopic: 'global',
@@ -273,10 +314,75 @@
           ${m.topic && m.topic !== 'global' ? `<span class="label">#${escapeHtml(m.topic)}</span>` : ''}
           <span class="ts">${formatTs(m.ts)}</span>
         </div>
-        <div class="text">${linkifyTopic(escapeHtml(m.body))}</div>
         ${renderAttachments(m.attachments)}
       </div>`;
+    // 正文：markdown 渲染（依赖未就绪时退化为纯文本）
+    const body = wrap.querySelector('.body');
+    const textEl = document.createElement('div');
+    if (md) {
+      // markdown-body 是 github-markdown-css 提供的样式作用域类
+      textEl.className = 'text markdown markdown-body';
+      textEl.innerHTML = md.render(m.body || '');
+      // 外链统一新窗口打开
+      textEl.querySelectorAll('a[href]').forEach(a => {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+      });
+    } else {
+      textEl.className = 'text';
+      textEl.innerHTML = linkifyTopicHtml(escapeHtml(m.body || ''));
+    }
+    // @topic:slug 转跳转链（跳过 code/pre 内的文本节点，避免误伤代码块）
+    decorateTopicMentions(textEl);
+    // 插入到 header 之后、attachments 之前
+    const attachments = body.querySelector('.attachments');
+    if (attachments) body.insertBefore(textEl, attachments);
+    else body.appendChild(textEl);
     return wrap;
+  }
+
+  // 在已渲染的 DOM 节点内，把 @topic:slug 文本替换为可点击 span
+  function decorateTopicMentions(rootEl) {
+    const re = /@topic:([a-zA-Z0-9_\-:.]{1,64})/g;
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        // 跳过 code / pre 子树
+        let p = node.parentElement;
+        while (p && p !== rootEl) {
+          const tag = p.tagName;
+          if (tag === 'CODE' || tag === 'PRE') return NodeFilter.FILTER_REJECT;
+          p = p.parentElement;
+        }
+        return re.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    const targets = [];
+    while (walker.nextNode()) targets.push(walker.currentNode);
+    for (const node of targets) {
+      const text = node.nodeValue;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const span = document.createElement('span');
+        span.className = 'label';
+        span.style.cursor = 'pointer';
+        span.dataset.jump = m[1];
+        span.textContent = '@topic:' + m[1];
+        frag.appendChild(span);
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  // 纯文本退化路径下，原先的字符串级 @topic 替换（保留用于无 md 场景）
+  function linkifyTopicHtml(html) {
+    return html.replace(/@topic:([a-zA-Z0-9_\-:.]{1,64})/g,
+      (_, slug) => `<span class="label" style="cursor:pointer" data-jump="${escapeHtml(slug)}">@topic:${escapeHtml(slug)}</span>`);
   }
 
   function renderAttachments(arr) {
@@ -287,11 +393,6 @@
         <span class="size">${formatBytes(a.size || 0)}</span>
       </div>`).join('');
     return `<div class="attachments">${items}</div>`;
-  }
-
-  function linkifyTopic(html) {
-    return html.replace(/@topic:([a-zA-Z0-9_\-:.]{1,64})/g,
-      (_, slug) => `<span class="label" style="cursor:pointer" data-jump="${escapeHtml(slug)}">@topic:${escapeHtml(slug)}</span>`);
   }
 
   // 委托：点击 @topic:xx 切换房间
